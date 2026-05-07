@@ -420,8 +420,8 @@ The Music Lounge overrides these with **per-track dynamic gradients** based on t
 
 ## 📄 License
 
-This project is licensed under the **MIT License**.
-Feel free to fork, modify, and build upon it.
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+
 
 ---
 

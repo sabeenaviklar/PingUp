@@ -230,15 +230,20 @@ cd PingUp-Backend
 npm install
 ```
 
-Create a `.env` file in the `PingUp-Backend/` folder:
+Create a `.env` file in the `PingUp-Backend/` folder by copying the example:
 
 ```bash
-# PingUp-Backend/.env
-
-MONGO_URI=mongodb+srv://youruser:yourpassword@cluster0.xxxxx.mongodb.net/pingup
-JWT_SECRET=pingup_super_secret_jwt_key_change_this_in_production
-PORT=3001
+# PingUp-Backend/.env (copy from .env.example)
+cp .env.example .env
 ```
+
+Then set your real values in `PingUp-Backend/.env`:
+
+- `MONGO_URI`: your MongoDB Atlas connection string
+- `JWT_SECRET`: a strong, unique secret (rotate if it was ever exposed)
+- `PORT`: server port (e.g. `3001`)
+
+> ⚠️ Never commit `.env` to GitHub. This repo includes `PingUp-Backend/.env.example` with placeholder values.
 
 > ⚠️ **Never commit `.env` to GitHub.** Make sure it's in your `.gitignore`.
 
@@ -421,7 +426,6 @@ The Music Lounge overrides these with **per-track dynamic gradients** based on t
 ## 📄 License
 
 This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
-
 
 ---
 

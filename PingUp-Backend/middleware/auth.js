@@ -1,4 +1,6 @@
-const jwt  = require('jsonwebtoken');
+const { hasPermission, ROLES } = require('../data/store');
+
+const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'internal_network_secret_2024';
@@ -16,8 +18,21 @@ function verifyToken(token) {
   catch { return null; }
 }
 
+const requireRole = (requiredRole) => {
+  return (req, res, next) => {
+    if (!req.user || !req.user.role) {
+      return res.status(401).json({ message: 'Unauthorized: No user role found' });
+    }
+
+    if (!hasPermission(req.user.role, requiredRole)) {
+      return res.status(403).json({ message: 'Forbidden: Insufficient permissions' });
+    }
+
+    next();
+  };
+}
 async function socketAuthMiddleware(socket, next) {
-  const token   = socket.handshake.auth?.token;
+  const token = socket.handshake.auth?.token;
   if (!token) return next(new Error('AUTH_REQUIRED'));
   const decoded = verifyToken(token);
   if (!decoded) return next(new Error('INVALID_TOKEN'));
@@ -27,4 +42,10 @@ async function socketAuthMiddleware(socket, next) {
   next();
 }
 
-module.exports = { generateToken, verifyToken, socketAuthMiddleware };
+module.exports = {
+  requireRole,
+  ROLES,
+  generateToken,
+  verifyToken,
+  socketAuthMiddleware
+};

@@ -666,6 +666,8 @@ io.on('connection', async (socket) => {
         username: m.username, role: m.role, text: m.text,
         timestamp: m.createdAt, deleted: m.deleted,
         pinned: pinnedIds.includes(m._id.toString()),
+        editedAt: m.editedAt,
+        editHistory: m.editHistory,
       })),
       roomSettings: roomToChannel(room),
     });
@@ -696,6 +698,8 @@ io.on('connection', async (socket) => {
         username: m.username, role: m.role, text: m.text,
         timestamp: m.createdAt, deleted: m.deleted,
         pinned: pinnedIds.includes(m._id.toString()),
+        editedAt: m.editedAt,
+        editHistory: m.editHistory,
       })),
       roomSettings: roomToChannel(room),
     });
@@ -882,6 +886,53 @@ io.on('connection', async (socket) => {
     const bc = channelId ? io.to(channelId) : io.to(rName);
     bc.emit('message:deleted', { id: messageId });
   }, 'Failed to delete message.'));
+
+  // ── Edit Message ───────────────────────────────────────────────
+  socket.on('message:edit', async ({ channelId, roomName: rName, messageId, newText }) => {
+    const trimmed = newText?.trim();
+    if (!trimmed) return socket.emit('error:message', 'Cannot edit message to empty text.');
+
+    const msg = await Message.findById(messageId);
+    if (!msg) return socket.emit('error:message', 'Message not found.');
+
+    // Only author or owner/moderator can edit
+    const isAuthor = msg.userId.toString() === socket.user.id;
+    const isMod = ['owner', 'moderator'].includes(socket.user.role);
+    
+    if (!isAuthor && !isMod)
+      return socket.emit('error:permission', 'You can only edit your own messages.');
+
+    if (msg.text === trimmed)
+      return socket.emit('error:message', 'New text is the same as original.');
+
+    // Add to edit history before updating
+    const editEntry = {
+      originalText: msg.text,
+      editedText: trimmed,
+      editedAt: new Date(),
+      editedBy: isMod && !isAuthor ? socket.user.id : null,
+    };
+
+    const updatedMsg = await Message.findByIdAndUpdate(
+      messageId,
+      {
+        text: trimmed,
+        editedAt: new Date(),
+        $push: { editHistory: editEntry }
+      },
+      { new: true }
+    );
+
+    const payload = {
+      id: messageId,
+      text: trimmed,
+      editedAt: updatedMsg.editedAt,
+      hasEditHistory: updatedMsg.editHistory.length > 0,
+    };
+
+    const bc = channelId ? io.to(channelId) : io.to(rName);
+    bc.emit('message:edited', payload);
+  });
 
   // ── Category CRUD ──────────────────────────────────────────────
   socket.on('category:create', safeSocketHandler(socket, 'category:create', async ({ name }) => {

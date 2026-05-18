@@ -1,24 +1,24 @@
 import { useState } from 'react';
 
 const MONTHS = [
-  'January','February','March','April','May','June',
-  'July','August','September','October','November','December'
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
 ];
-const DAYS  = Array.from({ length: 31 }, (_, i) => i + 1);
+const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 const YEARS = Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i);
 
 export default function Register({ onLogin, onSwitch }) {
   const [form, setForm] = useState({
-    email:       '',
+    email: '',
     displayName: '',
-    username:    '',
-    password:    '',
-    dobMonth:    '',
-    dobDay:      '',
-    dobYear:     '',
-    emailOptIn:  true,
+    username: '',
+    password: '',
+    dobMonth: '',
+    dobDay: '',
+    dobYear: '',
+    emailOptIn: true,
   });
-  const [error,   setError]   = useState('');
+  const [error, setError] = useState('');
   const [diceMsg, setDiceMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -40,13 +40,13 @@ export default function Register({ onLogin, onSwitch }) {
     }
     setLoading(true);
     try {
-      const res  = await fetch('https://pingup-backend-1.onrender.com/api/register', {
-        method:  'POST',
+      const res = await fetch('https://pingup-backend-1.onrender.com/api/register', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username:    form.username.trim(),
-          password:    form.password,
-          email:       form.email.trim(),
+          username: form.username.trim(),
+          password: form.password,
+          email: form.email.trim(),
           displayName: form.displayName.trim() || form.username.trim(),
         }),
       });
@@ -118,93 +118,245 @@ export default function Register({ onLogin, onSwitch }) {
 
       {/* ── Modal card ── */}
       <div className="reg-card">
-        <h1 className="reg-title">Create an account</h1>
 
-        {error   && <div className="reg-error">{error}</div>}
-        {diceMsg && <div className="reg-dice">{diceMsg}</div>}
+        {/* Mobile Branding */}
+        <div className="mobile-reg-brand">
+          <h1>PingUp</h1>
 
-        <form onSubmit={handleSubmit} noValidate>
-
-          <div className="reg-field">
-            <label>Email <span className="reg-req">*</span></label>
-            <input
-              name="email" type="email"
-              value={form.email} onChange={handleChange}
-              autoFocus required
-            />
-          </div>
-
-          <div className="reg-field">
-            <label>Display Name</label>
-            <input
-              name="displayName" type="text"
-              value={form.displayName} onChange={handleChange}
-              placeholder="How others see you"
-            />
-          </div>
-
-          <div className="reg-field">
-            <label>Username <span className="reg-req">*</span></label>
-            <input
-              name="username" type="text"
-              value={form.username} onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="reg-field">
-            <label>Password <span className="reg-req">*</span></label>
-            <input
-              name="password" type="password"
-              value={form.password} onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="reg-field">
-            <label>Date of Birth <span className="reg-req">*</span></label>
-            <div className="reg-dob-row">
-              <select name="dobMonth" value={form.dobMonth} onChange={handleChange}>
-                <option value="">Month</option>
-                {MONTHS.map((m, i) => <option key={m} value={i+1}>{m}</option>)}
-              </select>
-              <select name="dobDay" value={form.dobDay} onChange={handleChange}>
-                <option value="">Day</option>
-                {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-              <select name="dobYear" value={form.dobYear} onChange={handleChange}>
-                <option value="">Year</option>
-                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </div>
-          </div>
-
-          <label className="reg-checkbox-row">
-            <input
-              type="checkbox" name="emailOptIn"
-              checked={form.emailOptIn} onChange={handleChange}
-            />
-            <span>
-              (Optional) It's okay to send me emails with updates, tips, and special offers.
-              You can opt out at any time.
-            </span>
-          </label>
-
-          <p className="reg-tos">
-            By clicking "Create Account," you agree to our{' '}
-            <span className="reg-link">Terms of Service</span> and have read the{' '}
-            <span className="reg-link">Privacy Policy</span>.
+          <p>
+            Real-time community chat built for conversations,
+            collaboration, and shared experiences.
           </p>
 
-          <button className="reg-btn" type="submit" disabled={loading}>
-            {loading ? 'Creating Account…' : 'Create Account'}
-          </button>
-        </form>
+          <div className="mobile-reg-chips">
+            <div className="mobile-chip">💬 Real-Time Chat</div>
+            <div className="mobile-chip">🎵 Music Lounge</div>
+            <div className="mobile-chip">🛡️ Secure Roles</div>
+            <div className="mobile-chip">📨 Direct Messages</div>
+          </div>
+        </div>
 
-        <p className="reg-switch">
-          Already have an account?{' '}
-          <span className="reg-link" onClick={onSwitch}>Log in</span>
-        </p>
+        {/* Desktop Branding */}
+        <div className="reg-branding">
+
+          <div className="reg-brand-left">
+
+            <h1 className="reg-brand-title">
+              Join PingUp
+            </h1>
+
+            <p className="reg-brand-subtitle">
+              Create your space for real-time conversations,
+              private communities, shared music experiences,
+              and collaborative discussions.
+            </p>
+
+            <div className="reg-feature-grid">
+
+              <div className="reg-feature-card">
+                <span>💬</span>
+
+                <div>
+                  <h3>Live Messaging</h3>
+
+                  <p>
+                    WebSocket-powered real-time chat with typing indicators.
+                  </p>
+                </div>
+              </div>
+
+              <div className="reg-feature-card">
+                <span>🎵</span>
+
+                <div>
+                  <h3>Music Lounge</h3>
+
+                  <p>
+                    Stranger Things themed synced listening rooms.
+                  </p>
+                </div>
+              </div>
+
+              <div className="reg-feature-card">
+                <span>🛡️</span>
+
+                <div>
+                  <h3>Role Permissions</h3>
+
+                  <p>
+                    Owners, moderators, and members with secure controls.
+                  </p>
+                </div>
+              </div>
+
+              <div className="reg-feature-card">
+                <span>📨</span>
+
+                <div>
+                  <h3>Direct Messages</h3>
+
+                  <p>
+                    Private conversations with unread badges and live updates.
+                  </p>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* Register Form */}
+          <div className="reg-form-side">
+
+            <h1 className="reg-title">Create an account</h1>
+
+            {error && <div className="reg-error">{error}</div>}
+            {diceMsg && <div className="reg-dice">{diceMsg}</div>}
+
+            <form onSubmit={handleSubmit} noValidate>
+
+              <div className="reg-field">
+                <label>Email <span className="reg-req">*</span></label>
+
+                <input
+                  name="email"
+                  type="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  autoFocus
+                  required
+                />
+              </div>
+
+              <div className="reg-field">
+                <label>Display Name</label>
+
+                <input
+                  name="displayName"
+                  type="text"
+                  value={form.displayName}
+                  onChange={handleChange}
+                  placeholder="How others see you"
+                />
+              </div>
+
+              <div className="reg-field">
+                <label>Username <span className="reg-req">*</span></label>
+
+                <input
+                  name="username"
+                  type="text"
+                  value={form.username}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+
+              <div className="reg-field">
+                <label>Password <span className="reg-req">*</span></label>
+
+                <input
+                  name="password"
+                  type="password"
+                  value={form.password}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+
+              <div className="reg-field">
+                <label>Date of Birth <span className="reg-req">*</span></label>
+
+                <div className="reg-dob-row">
+
+                  <select
+                    name="dobMonth"
+                    value={form.dobMonth}
+                    onChange={handleChange}
+                  >
+                    <option value="">Month</option>
+
+                    {MONTHS.map((m, i) => (
+                      <option key={m} value={i + 1}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    name="dobDay"
+                    value={form.dobDay}
+                    onChange={handleChange}
+                  >
+                    <option value="">Day</option>
+
+                    {DAYS.map(d => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    name="dobYear"
+                    value={form.dobYear}
+                    onChange={handleChange}
+                  >
+                    <option value="">Year</option>
+
+                    {YEARS.map(y => (
+                      <option key={y} value={y}>
+                        {y}
+                      </option>
+                    ))}
+                  </select>
+
+                </div>
+              </div>
+
+              <label className="reg-checkbox-row">
+                <input
+                  type="checkbox"
+                  name="emailOptIn"
+                  checked={form.emailOptIn}
+                  onChange={handleChange}
+                />
+
+                <span>
+                  (Optional) It's okay to send me emails with updates,
+                  tips, and special offers.
+                </span>
+              </label>
+
+              <p className="reg-tos">
+                By clicking "Create Account," you agree to our{' '}
+                <span className="reg-link">Terms of Service</span> and have read the{' '}
+                <span className="reg-link">Privacy Policy</span>.
+              </p>
+
+              <button
+                className="reg-btn"
+                type="submit"
+                disabled={loading}
+              >
+                {loading ? 'Creating Account…' : 'Create Account'}
+              </button>
+
+            </form>
+
+            <p className="reg-switch">
+              Already have an account?{' '}
+
+              <span
+                className="reg-link"
+                onClick={onSwitch}
+              >
+                Log in
+              </span>
+            </p>
+
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -3,7 +3,11 @@ const { hasPermission, ROLES } = require('../data/store');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'internal_network_secret_2024';
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET is not defined in environment variables");
+}
+
+const JWT_SECRET = process.env.JWT_SECRET;
 
 function generateToken(user) {
   return jwt.sign(

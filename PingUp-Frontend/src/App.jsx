@@ -48,7 +48,22 @@ const [threadReplies, setThreadReplies] = useState([]);
 
   const isVoiceChannel = activeChannel && VOICE_CHANNELS.includes(activeChannel.name);
   const isOwner        = currentUser?.role === 'owner';
-  const isMod          = ['owner', 'moderator'].includes(currentUser?.role);
+
+  const handleLogout = useCallback(() => {
+    disconnectSocket();
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setCurrentUser(null);
+    setToken('');
+    setActiveChannel(null);
+    setActiveDM(null);
+    setMessages([]);
+    setOnlineUsers([]);
+    setShowProfile(false);
+    setShowFriends(false);
+    setShowAdmin(false);
+    setAuthPage('login');
+  }, []);
 
   // ── Socket setup ───────────────────────────────────────────────
   useEffect(() => {
@@ -132,7 +147,7 @@ const [threadReplies, setThreadReplies] = useState([]);
 }
 });
 
-    socket.on('thread:history', ({ parentMessageId, replies }) => {
+    socket.on('thread:history', ({ replies }) => {
   setThreadReplies(replies || []);
 });
 
@@ -191,21 +206,6 @@ const [threadReplies, setThreadReplies] = useState([]);
     localStorage.setItem('user',  JSON.stringify(user));
   };
 
-  const handleLogout = useCallback(() => {
-    disconnectSocket();
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setCurrentUser(null);
-    setToken('');
-    setActiveChannel(null);
-    setActiveDM(null);
-    setMessages([]);
-    setOnlineUsers([]);
-    setShowProfile(false);
-    setShowFriends(false);
-    setShowAdmin(false);
-    setAuthPage('login');
-  }, []);
 
   // ── Channel select ─────────────────────────────────────────────
   const handleChannelSelect = useCallback((ch) => {

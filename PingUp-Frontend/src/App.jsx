@@ -29,6 +29,8 @@ export default function App() {
   const [activeChannel, setActiveChannel] = useState(null);
   const [roomSettings,  setRoomSettings]  = useState(null);
   const [messages,      setMessages]      = useState([]);
+  const [selectedThread, setSelectedThread] = useState(null);
+const [threadReplies, setThreadReplies] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [commandResps,  setCommandResps]  = useState([]);
   const [typingUsers,   setTypingUsers]   = useState([]);
@@ -98,9 +100,42 @@ export default function App() {
       setCommandResps(prev => [...prev, res])
     );
 
-    socket.on('message:new', msg =>
-      setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg])
+    socket.on('message:new', (msg) => {
+
+  if (msg.parentMessageId) {
+    setThreadReplies(prev =>
+      prev.find(m => m.id === msg.id)
+        ? prev
+        : [...prev, msg]
     );
+
+    setMessages(prev =>
+      prev.map(m =>
+        m.id === msg.parentMessageId
+          ? {
+              ...m,
+              replyCount: (m.replyCount || 0) + 1
+            }
+          : m
+      )
+    );
+
+    return;
+  }
+
+ if (!msg.parentMessageId) {
+  setMessages(prev =>
+    prev.find(m => m.id === msg.id)
+      ? prev
+      : [...prev, msg]
+  );
+}
+});
+
+    socket.on('thread:history', ({ parentMessageId, replies }) => {
+  setThreadReplies(replies || []);
+});
+
     socket.on('message:deleted', ({ id }) =>
       setMessages(prev =>
         prev.map(m => m.id === id ? { ...m, deleted: true, text: '[message deleted]' } : m)
@@ -201,6 +236,23 @@ export default function App() {
     if (!activeChannel) return;
     socketRef.current?.emit('typing:start', { channelId: activeChannel.id });
   }, [activeChannel]);
+
+  const handleOpenThread = useCallback((message) => {
+
+  if (!message) {
+    setSelectedThread(null);
+    setThreadReplies([]);
+    return;
+  }
+
+  setSelectedThread(message);
+  setThreadReplies([]);
+
+  socketRef.current?.emit('thread:get', {
+    parentMessageId: message.id,
+  });
+
+}, []);
 
   const handleTypingStop = useCallback(() => {
     if (!activeChannel) return;
@@ -344,6 +396,9 @@ export default function App() {
             channelId={activeChannel.id}
             roomName={activeChannel.name}
             roomSettings={roomSettings}
+            selectedThread={selectedThread}
+threadReplies={threadReplies}
+onOpenThread={handleOpenThread}
           />
           <MessageInput
             onSend={handleSend}

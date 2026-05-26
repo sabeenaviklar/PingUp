@@ -3,6 +3,9 @@ import { useState, useEffect, useRef } from 'react';
 export default function MessageList({
   messages,
   notifications,
+  selectedThread,
+  threadReplies,
+  onOpenThread,
   commandResponses,
   typingUsers,
   currentUser,
@@ -15,6 +18,7 @@ export default function MessageList({
   const [editingMsgId, setEditingMsgId] = useState(null);
   const [editText, setEditText] = useState('');
   const [showEditHistory, setShowEditHistory] = useState(null);
+  const [threadReplyText, setThreadReplyText] = useState('');
   const bottomRef = useRef(null);
   const isMod = ['owner', 'moderator'].includes(currentUser?.role);
 
@@ -58,6 +62,10 @@ export default function MessageList({
   }
 
   const pinnedMessages = messages.filter(m => m.pinned && !m.deleted);
+
+  const mainMessages = messages.filter(
+  (msg) => !msg.parentMessageId
+);
 
   return (
     <div className="msg-list">
@@ -141,7 +149,7 @@ export default function MessageList({
 
       {/* ── Messages ── */}
       <div className="msg-messages-wrap">
-        {messages.map(msg => (
+        {mainMessages.map(msg => (
           <div
             key={msg.id}
             className={`msg-row ${msg.deleted ? 'msg-deleted' : ''} ${msg.pinned && !msg.deleted ? 'msg-is-pinned' : ''}`}
@@ -176,6 +184,16 @@ export default function MessageList({
                     ✏️ edited
                   </span>
                 )}
+                {msg.replyCount > 0 && (
+  <span
+    className="msg-thread-badge"
+    onClick={() => {
+  onOpenThread(msg);
+}}
+  >
+    💬 {msg.replyCount} repl{msg.replyCount > 1 ? 'ies' : 'y'}
+  </span>
+)}
                 {msg.pinned && !msg.deleted && (
                   <span className="msg-pin-tag">📌 pinned</span>
                 )}
@@ -221,6 +239,15 @@ export default function MessageList({
                     onClick={() => handleEditStart(msg)}
                   >✏️</button>
                 )}
+                <button
+  className="msg-toolbar-btn"
+  title="Reply to message"
+  onClick={() => {
+  onOpenThread(msg);
+}}
+>
+  ↩️
+</button>
                 {/* Pin button for mods */}
                 {isMod && (
                   <button
@@ -260,6 +287,79 @@ export default function MessageList({
             </span>
           </div>
         )}
+
+        
+
+        {selectedThread && (
+  <div
+  className="msg-thread-panel"
+  
+>
+
+    <div className="msg-thread-header">
+      <h3>Thread</h3>
+
+      <button
+        className="msg-thread-close"
+        onClick={() => onOpenThread(null)}
+      >
+        ✕
+      </button>
+    </div>
+
+    <div className="msg-thread-parent">
+      <strong>{selectedThread.username}</strong>
+      <p>{selectedThread.text}</p>
+    </div>
+
+    <div className="msg-thread-replies">
+      {threadReplies.map(reply => (
+        <div key={reply.id} className="msg-thread-reply">
+
+          <div className="msg-thread-reply-user">
+            {reply.username}
+          </div>
+
+          <div className="msg-thread-reply-text">
+            {reply.text}
+          </div>
+
+        </div>
+      ))}
+    </div>
+
+    <div className="msg-thread-input-wrap">
+
+  <textarea
+    className="msg-thread-input"
+    placeholder="Reply to thread..."
+    value={threadReplyText}
+    onChange={(e) => setThreadReplyText(e.target.value)}
+  />
+
+  <button
+    className="msg-thread-send-btn"
+    onClick={() => {
+
+      if (!threadReplyText.trim()) return;
+
+      socket?.emit('message:send', {
+        channelId,
+        roomName,
+        text: threadReplyText,
+        parentMessageId: selectedThread.id,
+      });
+
+      setThreadReplyText('');
+    }}
+  >
+    Send
+  </button>
+
+</div>
+
+  </div>
+)}
 
         <div ref={bottomRef} />
       </div>

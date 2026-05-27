@@ -636,7 +636,7 @@ io.on('connection', async (socket) => {
         if (dbUser.banned) {
             socket.emit('kicked', { by: 'server (banned)' });
             return socket.disconnect();
-    }
+        }
     
 
     // Sync role from DB
@@ -663,7 +663,7 @@ io.on('connection', async (socket) => {
     console.error('[connection] setup error:', err);
     socket.emit('error:general', 'Connection setup failed.');
     socket.disconnect();
-
+    return;
 }
 
     // ── Join channel (by name) ─────────────────────────────────────

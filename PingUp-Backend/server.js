@@ -238,13 +238,22 @@ app.put('/api/profile', async (req, res) => {
     try {
         const decoded = authHeader(req, res);
         if (!decoded) return;
-        const {username, displayName, email, phone } = req.body;
-        const user = await User.findByIdAndUpdate(
-            decoded.id, {username, displayName, email, phone }, { new: true }
-        );
+        const updates = {
+            ...(req.body.username !== undefined ? { username: req.body.username.trim().toLowerCase() } : {}),
+            ...(req.body.displayName !== undefined ? { displayName: req.body.displayName.trim() } : {}),
+            ...(req.body.email !== undefined ? { email: req.body.email.trim() } : {}),
+            ...(req.body.phone !== undefined ? { phone: req.body.phone.trim() } : {}),
+        };
+        const user = await User.findByIdAndUpdate(decoded.id, updates, {
+          new: true,
+          runValidators: true
+        });
+        if (!user) return res.status(404).json({ error: 'User not found.' });
         res.json({ user: user.toSafeObject() });
-    } catch (err) {
-        res.status(500).json({ error: 'Server error.' });
+    }catch (err) {
+        if (err?.code === 11000 && err?.keyPattern?.username) {
+           return res.status(409).json({ error: 'Username already taken.' });
+        }
     }
 });
 

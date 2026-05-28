@@ -7,10 +7,10 @@ export default function ProfileModal({ user, onClose, setCurrentUser }) {
   const [tab, setTab] = useState('security');
   const [editing, setEditing] = useState(null); // 'displayName' | 'username' | 'email' | 'phone'
   const [fields, setFields] = useState({
-    displayName: user.displayName,
-    username:    user.username,
-    email:       user.email,
-    phone:       '1234565862',
+    displayName: user.displayName || '',
+    username:    user.username || '',
+    email:       user.email || '',
+    phone:       user.phone || '',
   });
   const [tempVal, setTempVal] = useState('');
   const [revealed, setRevealed] = useState({ email: false, phone: false });
@@ -28,10 +28,7 @@ export default function ProfileModal({ user, onClose, setCurrentUser }) {
 
   async function saveEdit(){
     if (tempVal.trim()) {
-      const updatedFields = {
-        ...fields,
-        [editing]: tempVal.trim()
-      };
+      const patch = { [editing]: tempVal.trim() };
       try{
         const token = localStorage.getItem('token');
         const res = await fetch(`${API_URL}/api/profile`, { method: 'PUT',
@@ -39,14 +36,19 @@ export default function ProfileModal({ user, onClose, setCurrentUser }) {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(updatedFields),
+          body: JSON.stringify(patch),
         });
         const data = await res.json();
         if (!res.ok) {
           console.error(data.error);
           return;
         }
-        setFields(updatedFields);  
+        setFields({
+          displayName: data.user.displayName || '',
+          username: data.user.username || '',
+          email: data.user.email || '',
+          phone: data.user.phone || '',
+        });  
         setCurrentUser(data.user);
         localStorage.setItem('user',JSON.stringify(data.user));
     } catch (err) {

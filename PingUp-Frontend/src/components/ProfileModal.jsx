@@ -60,11 +60,13 @@ export default function ProfileModal({ user, onClose, setCurrentUser }) {
   }
 
   function maskEmail(email) {
+    if (!email || !email.includes('@')) return email;
     const [local, domain] = email.split('@');
     return '*'.repeat(Math.max(local.length, 8)) + '@' + domain;
   }
 
   function maskPhone(phone) {
+    if (!phone || phone === 'No phone provided') return phone;
     return '*'.repeat(Math.max(phone.length - 4, 6)) + phone.slice(-4);
   }
 

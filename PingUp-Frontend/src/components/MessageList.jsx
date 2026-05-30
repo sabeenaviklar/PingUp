@@ -27,6 +27,7 @@ export default function MessageList({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+
   function handleDelete(msgId) {
     if (!confirm('Delete this message?')) return;
     socket?.emit('message:delete', { channelId, roomName, messageId: msgId });
@@ -35,6 +36,13 @@ export default function MessageList({
   function handlePin(msgId) {
     socket?.emit('message:pin', { channelId, roomName, messageId: msgId });
   }
+
+  function handleReaction(msgId, emoji) {
+  socket?.emit('message:reaction', {
+    messageId: msgId,
+    emoji,
+  });
+}
 
   function handleEditStart(msg) {
     setEditingMsgId(msg.id);
@@ -149,6 +157,7 @@ export default function MessageList({
 
       {/* ── Messages ── */}
       <div className="msg-messages-wrap">
+
         {mainMessages.map(msg => (
           <div
             key={msg.id}
@@ -226,11 +235,24 @@ export default function MessageList({
               ) : (
                 <div className="msg-text">{msg.text}</div>
               )}
+              {msg.reactions?.length > 0 && (
+  <div className="msg-reactions">
+    {msg.reactions.map((reaction, idx) => (
+      <button
+        key={idx}
+        className="msg-reaction-chip"
+        onClick={() => handleReaction(msg.id, reaction.emoji)}
+      >
+        <span>{reaction.emoji}</span>
+        <span>{reaction.users.length}</span>
+      </button>
+    ))}
+  </div>
+)}
             </div>
 
             {/* Toolbar — appears on hover */}
-            {/* {!msg.deleted && hoveredMsg === msg.id && ( */}
-             {!msg.deleted && (
+            {!msg.deleted && hoveredMsg === msg.id && (
               <div className="msg-toolbar">
                 {/* Edit button for author or mods */}
                 {(msg.userId === currentUser?.id || isMod) && editingMsgId !== msg.id && (
@@ -250,8 +272,7 @@ export default function MessageList({
   ↩️
 </button>
                 {/* Pin button for mods */}
-                {/* {isMod && ( */}
-                {true && (
+                {isMod && (
                   <button
                     className="msg-toolbar-btn"
                     title={msg.pinned ? 'Unpin' : 'Pin message'}
@@ -259,8 +280,32 @@ export default function MessageList({
                   >📌</button>
                 )}
                 {/* Delete button for mods */}
-                {/* {isMod && ( */}
-                {true && (
+
+                <button
+  className="msg-toolbar-btn"
+  title="React"
+  onClick={() => handleReaction(msg.id, '👍')}
+>
+  👍
+</button>
+
+<button
+  className="msg-toolbar-btn"
+  title="React"
+  onClick={() => handleReaction(msg.id, '😂')}
+>
+  😂
+</button>
+
+<button
+  className="msg-toolbar-btn"
+  title="React"
+  onClick={() => handleReaction(msg.id, '🔥')}
+>
+  🔥
+</button>
+
+                {isMod && (
                   <button
                     className="msg-toolbar-btn msg-toolbar-btn-delete"
                     title="Delete message"

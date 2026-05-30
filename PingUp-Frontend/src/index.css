@@ -7317,3 +7317,32 @@ body {
     border-top: 1px solid rgba(255, 255, 255, .06);
   }
 }
+
+/* ── Message Reactions ── */
+
+.msg-reactions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.msg-reaction-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all .15s ease;
+  color: var(--text-primary);
+  font-size: .82rem;
+}
+
+.msg-reaction-chip:hover {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}

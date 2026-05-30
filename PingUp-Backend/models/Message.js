@@ -48,6 +48,13 @@ const messageSchema = new mongoose.Schema({
     },
   }],
 
+  reactions: [
+    {
+      emoji: { type: String },
+      users: [{ type: String }]
+    }
+  ],
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('Message', messageSchema);

@@ -223,7 +223,7 @@ const [threadReplies, setThreadReplies] = useState([]);
       }
     });
     return () => socket.removeAllListeners();
-  }, [token, currentUser?.id,  handleLogout]);
+  }, [token, currentUser,  handleLogout]);
 
   // ── Auth ───────────────────────────────────────────────────────
   const handleLogin = (user, tok) => {

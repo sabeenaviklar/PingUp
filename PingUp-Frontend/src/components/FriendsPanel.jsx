@@ -1,4 +1,6 @@
 import { useState } from 'react';
+
+// Extracting shared styles to keep code clean and DRY
 const clearButtonBaseStyle = {
   background: 'rgba(255,255,255,0.1)',
   border: 'none',
@@ -46,7 +48,8 @@ export default function FriendsPanel({ onlineUsers }) {
         </div>
 
         <button
-          className={`fp-add-btn ${tab === 'add_friend' ? 'active' : ''}`}
+          className={`fp-add-btn ${tab === 'add_friend' ? 'active' : ''
+            }`}
           onClick={() => setTab('add_friend')}
         >
           Add Friend
@@ -100,11 +103,13 @@ export default function FriendsPanel({ onlineUsers }) {
                 border: 'none',
                 color: 'var(--text-primary)',
                 fontSize: '16px',
-                outline: 'none',
+                outline: 'none'
               }}
               placeholder="Enter username"
               value={addFriendInput}
-              onChange={(e) => setAddFriendInput(e.target.value)}
+              onChange={(e) =>
+                setAddFriendInput(e.target.value)
+              }
             />
 
             {/* Clear Button for Add Friend Input */}
@@ -139,14 +144,18 @@ export default function FriendsPanel({ onlineUsers }) {
                     ? 'pointer'
                     : 'not-allowed',
                 fontWeight: 600,
-                transition: 'background-color 0.2s, color 0.2s',
+                transition:
+                  'background-color 0.2s, color 0.2s',
                 marginLeft: '12px'
               }}
-              disabled={addFriendInput.trim().length === 0}
+              disabled={
+                addFriendInput.trim().length === 0
+              }
               onClick={() => {
                 console.log(
                   `Friend request initiated for ${addFriendInput.trim()}`
                 );
+
                 setAddFriendInput('');
               }}
             >

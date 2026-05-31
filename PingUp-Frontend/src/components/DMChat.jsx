@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function DMChat({ currentUser, otherUser, token, socket, onClose }) {
   const [messages, setMessages]       = useState([]);
@@ -7,10 +7,12 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
   const [isTyping, setIsTyping]       = useState(false);
   const bottomRef                     = useRef(null);
   const typingTimeout                 = useRef(null);
-  const inputRef = useRef(null);
+  const inputRef                      = useRef(null);
+
+  // Auto-focus input when opening DM (removed unnecessary setTimeout)
   useEffect(() => {
-  setTimeout(() => inputRef.current?.focus(), 0);
-}, [otherUser?.id]);
+    inputRef.current?.focus();
+  }, [otherUser?.id]);
 
   // Load history + join DM room
   useEffect(() => {
@@ -47,7 +49,7 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
       socket.off('dm:typing',  onTyping);
       socket.off('dm:read',    onRead);
     };
-  }, [otherUser?.id]);
+  }, [otherUser?.id, currentUser.username, socket, token]); // Added missing dependencies
 
   // Auto scroll
   useEffect(() => {
@@ -58,10 +60,13 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
     e.preventDefault();
     const trimmed = text.trim();
     if (!trimmed) return;
-socket.emit('dm:send', { toUserId: otherUser.id, text: trimmed });
-setText('');
-setTimeout(() => inputRef.current?.focus(), 0);
-clearTimeout(typingTimeout.current);
+    socket.emit('dm:send', { toUserId: otherUser.id, text: trimmed });
+    setText('');
+    
+    // Maintain focus after sending (removed unnecessary setTimeout)
+    inputRef.current?.focus();
+    
+    clearTimeout(typingTimeout.current);
     socket.emit('dm:typing:stop', { toUserId: otherUser.id });
     setTyping(false);
   }
@@ -170,12 +175,12 @@ clearTimeout(typingTimeout.current);
 
       {/* Input */}
       <form className="dm-chat-input-row" onSubmit={handleSend}>
-<input
-  ref={inputRef}
-  value={text}
-  onChange={handleChange}
-  placeholder={`Message ${otherUser.username}…`}
-/>
+        <input
+          ref={inputRef}
+          value={text}
+          onChange={handleChange}
+          placeholder={`Message ${otherUser.username}…`}
+        />
         <button type="submit" disabled={!text.trim()}>➤</button>
       </form>
     </div>

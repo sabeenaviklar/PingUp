@@ -1,8 +1,6 @@
 import { useState } from 'react';
 
 export default function ProfileModal({ user, onClose, setCurrentUser }) {
-  if (!user) return null;
-
   const API_URL = import.meta.env.VITE_API_URL;
   const [tab, setTab] = useState('security');
   const [editing, setEditing] = useState(null); // 'displayName' | 'username' | 'email' | 'phone'

@@ -185,7 +185,17 @@ app.get('/api/structure', async (req, res) => {
   const rooms = await Room.find().sort({ category: 1, order: 1, createdAt: 1 });
   const categoryMap = new Map();
   for (const r of rooms) {
-    if (r.isPrivate && !hasPermission(me.role, ROLES.MODERATOR)) continue; // Keep private from members
+    if (r.isPrivate) {
+  const isModOrOwner = hasPermission(me.role, ROLES.MODERATOR);
+
+  const isAllowedUser = r.allowedUsers.some(
+    id => id.toString() === me._id.toString()
+  );
+
+  if (!isModOrOwner && !isAllowedUser) {
+    continue;
+  }
+} // Keep private from members
     const catKey = r.category || 'general';
     if (!categoryMap.has(catKey))
       categoryMap.set(catKey, { id: `cat-${catKey}`, name: catKey, channels: [] });
@@ -204,11 +214,16 @@ app.get('/api/rooms', async (req, res) => {
   const rooms = await Room.find().sort({ createdAt: 1 });
 
   const filteredRooms = rooms.filter(room => {
-    if (room.isPrivate && !hasPermission(me.role, ROLES.MODERATOR)) {
-      return false;
-    }
+  if (!room.isPrivate) return true;
+
+  if (hasPermission(me.role, ROLES.MODERATOR)) {
     return true;
-  });
+  }
+
+  return room.allowedUsers?.some(
+    userId => userId.toString() === me._id.toString()
+  );
+});
 
   res.json(filteredRooms.map(r => roomToChannel(r)));
 });
@@ -649,7 +664,17 @@ io.on('connection', async (socket) => {
   const rooms = await Room.find().sort({ category: 1, order: 1, createdAt: 1 });
   const categoryMap = new Map();
   for (const r of rooms) {
-    if (r.isPrivate && dbUser.role === ROLES.MEMBER) continue;
+    if (r.isPrivate) {
+  const isModOrOwner = hasPermission(dbUser.role, ROLES.MODERATOR);
+
+  const isAllowedUser = r.allowedUsers.some(
+    id => id.toString() === dbUser._id.toString()
+  );
+
+  if (!isModOrOwner && !isAllowedUser) {
+    continue;
+  }
+}
     const catKey = r.category || 'general';
     if (!categoryMap.has(catKey))
       categoryMap.set(catKey, { id: `cat-${catKey}`, name: catKey, channels: [] });

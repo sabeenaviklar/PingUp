@@ -19,18 +19,19 @@ const messageQueue = new Queue(queueName, {
 
 // Setup Worker to process queue
 const messageWorker = new Worker(queueName, async (job) => {
-    const { _id, roomName, userId, username, role, text, parentMessageId } = job.data;
+    const { _id, roomName, userId, username, role, text, parentMessageId, imageUrl } = job.data;
     
     try {
         const msg = await Message.create({
-            _id,
-            roomName,
-            userId,
-            username,
-            role,
-            text,
-            parentMessageId
-        });
+    _id,
+    roomName,
+    userId,
+    username,
+    role,
+    text,
+    parentMessageId,
+    imageUrl,
+});
 
         if (parentMessageId) {
             await Message.findByIdAndUpdate(

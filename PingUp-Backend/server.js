@@ -5,6 +5,19 @@ const { Server } = require('socket.io');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+
+// Image upload setup
+const uploadDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
+});
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
 
 const { pubClient, subClient, redisClient, redisReady } = require('./config/redis');
 const { messageQueue } = require('./services/messageQueue');
@@ -43,6 +56,15 @@ app.use(
     })
 );
 app.use(express.json());
+// Serve uploaded images
+app.use('/uploads', express.static(uploadDir));
+
+// Image upload route
+app.post('/api/upload', verifyToken, upload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const imageUrl = `/uploads/${req.file.filename}`;
+  res.json({ imageUrl });
+});
 
 
 // ─── Role Helpers ──────────────────────────────────────────────────
@@ -760,9 +782,9 @@ io.on('connection', async (socket) => {
         safeSocketHandler(
             socket,
             'message:send',
-            async ({ roomName, channelId, text, parentMessageId }) => {
+            async ({ roomName, channelId, text, parentMessageId, imageUrl }) => {
                 const trimmed = text?.trim();
-                if (!trimmed) return;
+               if (!trimmed && !imageUrl) return;
 
                 let resolvedRoom = roomName;
                 let room = null;
@@ -797,15 +819,16 @@ io.on('connection', async (socket) => {
                     username: socket.user.username,
                     role: freshUser.role,
                     text: trimmed,
-                    parentMessageId: parentMessageId || null,
+                    parentMessageId: parentMessageId || null, 
+                    imageUrl: imageUrl || null,
                 });
 
                 const payload = {
                     id: msgId.toString(), userId: socket.user.id,
                     username: socket.user.username, role: freshUser.role,
-                    text: trimmed, timestamp: msg.createdAt, deleted: false, pinned: false,
-                    parentMessageId: msg.parentMessageId,
-                    replyCount: msg.replyCount,
+                    text: trimmed, timestamp: new Date(), deleted: false, pinned: false,
+parentMessageId: parentMessageId || null,
+replyCount: 0, imageUrl: imageUrl || null,
                 };
 
                 io.to(resolvedRoom).emit('message:new', payload);

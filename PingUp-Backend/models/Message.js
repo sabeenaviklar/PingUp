@@ -13,7 +13,8 @@ const messageSchema = new mongoose.Schema({
 
   role:      { type: String, required: true },
 
-  text:      { type: String, required: true },
+  text:       { type: String, required: false, default: '' },
+imageUrl:   { type: String, default: null },
 
   deleted:   { type: Boolean, default: false },
 

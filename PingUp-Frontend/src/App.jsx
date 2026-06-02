@@ -234,12 +234,13 @@ const [threadReplies, setThreadReplies] = useState([]);
   }, []);
 
   // ── Messaging ──────────────────────────────────────────────────
-  const handleSend = useCallback((text) => {
+  const handleSend = useCallback((text, imageUrl) => {
     if (!activeChannel) return;
     socketRef.current?.emit('message:send', {
       channelId: activeChannel.id,
       roomName:  activeChannel.name,
       text,
+      imageUrl,
     });
   }, [activeChannel]);
 

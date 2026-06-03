@@ -28,6 +28,10 @@ if (!ADMIN_PASSWORD || !MOD_PASSWORD || !MEMBER_PASSWORD) {
   );
   process.exit(1);
 }
+if (!process.env.MONGO_URI) {
+  console.error('Missing MONGO_URI. Set it in PingUp-Backend/.env before running seed.js.');
+  process.exit(1);
+}
 
 async function seed() {
   await mongoose.connect(process.env.MONGO_URI);

@@ -1456,30 +1456,34 @@ replyCount: 0, imageUrl: imageUrl || null,
 
     // ── Disconnect ─────────────────────────────────────────────────
     socket.on('disconnect', safeSocketHandler(socket, 'disconnect', async () => {
+        // Remove this socket from the user's active-socket set in Redis
         await redisClient.sRem(`user:sockets:${socket.user.id}`, socket.id);
         const socketCount = await redisClient.sCard(`user:sockets:${socket.user.id}`);
+
         if (socketCount === 0) {
+            // Last tab closed — the user is truly offline now
             await redisClient.sRem('users:online', socket.user.id);
             await User.findByIdAndUpdate(socket.user.id, { online: false, socketId: null });
+
+            // Only broadcast "left" notifications when the user has no remaining sessions.
+            // If they still have other tabs open, they are still present — do not notify.
+            if (socket.currentRoom) {
+                io.to(socket.currentRoom).emit('room:notification', {
+                    text: `${socket.user.username} left`,
+                    type: 'leave',
+                });
+            }
+
+            if (socket.currentVoice) {
+                io.to(`voice:${socket.currentVoice}`).emit('voice:left', {
+                    userId: socket.user.id,
+                });
+            }
         }
 
-        // Notify text channel
-        if (socket.currentRoom) {
-            io.to(socket.currentRoom).emit('room:notification', {
-                text: `${socket.user.username} left`,
-                type: 'leave',
-            });
-        }
-
-        // Notify voice channel
-        if (socket.currentVoice) {
-            io.to(`voice:${socket.currentVoice}`).emit('voice:left', {
-                userId: socket.user.id,
-            });
-        }
-
+        // Always re-broadcast the updated online list so counts stay accurate
         await broadcastUserList();
-        console.log(`[-] ${socket.user.username}`);
+        console.log(`[-] ${socket.user.username} (${socketCount} session(s) remaining)`);
     }, 'Failed to clean up disconnected user.'));
 });
 

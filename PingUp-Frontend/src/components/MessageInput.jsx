@@ -55,6 +55,7 @@ export default function MessageInput({
         onKeyDown={handleKeyDown}
         disabled={isDisabled}
         rows={1}
+        maxLength={2000}
       />
       <button
         className="msg-send-btn"

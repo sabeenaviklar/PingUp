@@ -189,6 +189,7 @@ export default function MessageList({
                     value={editText}
                     onChange={(e) => setEditText(e.target.value)}
                     autoFocus
+                    maxLength={2000}
                   />
                   <div className="msg-edit-buttons">
                     <button

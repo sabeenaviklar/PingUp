@@ -12,6 +12,8 @@ const DirectMessage = require('./models/DirectMessage');
 const { generateToken, socketAuthMiddleware, verifyToken } = require('./middleware/auth');
 const { ROLES, hasPermission } = require('./data/store'); // <-- IMPORTED WEIGHT SYSTEM
 
+const MAX_MESSAGE_LENGTH = 2000;
+
 const app = express();
 const server = http.createServer(app);
 
@@ -708,7 +710,16 @@ io.on('connection', async (socket) => {
   // ── Send message ───────────────────────────────────────────────
   socket.on('message:send', safeSocketHandler(socket, 'message:send', async ({ roomName, channelId, text }) => {
     const trimmed = text?.trim();
-    if (!trimmed) return;
+
+if (!trimmed) return;
+
+if (trimmed.length > MAX_MESSAGE_LENGTH) {
+
+  return socket.emit(
+    'error:general',
+    `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters.`
+  );
+}
 
     let resolvedRoom = roomName;
     let room = null;
@@ -1035,7 +1046,15 @@ io.on('connection', async (socket) => {
 
   socket.on('dm:send', safeSocketHandler(socket, 'dm:send', async ({ toUserId, text }) => {
     const trimmed = text?.trim();
-    if (!trimmed) return;
+
+if (!trimmed) return;
+
+if (trimmed.length > MAX_MESSAGE_LENGTH) {
+  return socket.emit(
+    'error:general',
+    `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters.`
+  );
+}
     const toUser = await User.findById(toUserId);
     if (!toUser) return socket.emit('error:general', 'User not found.');
     const convId = [socket.user.id, toUserId].sort().join('_');

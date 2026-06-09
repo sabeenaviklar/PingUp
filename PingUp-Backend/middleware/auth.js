@@ -32,7 +32,7 @@ function generateRefreshToken(user) {
 }
 
 function verifyToken(token) {
-  try { return jwt.verify(token, JWT_SECRET); }
+  try { return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }); }
   catch { return null; }
 }
 

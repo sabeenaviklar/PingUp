@@ -460,9 +460,9 @@ useEffect(() => {
       className="logout-modal"
       onClick={(e) => e.stopPropagation()}
     >
-      <h3>Log Out?</h3>
+      <h3 id="logout-modal-title">Log Out?</h3>
 
-      <p>
+      <p id="logout-modal-description">
         Are you sure you want to log out of your account?
       </p>
 

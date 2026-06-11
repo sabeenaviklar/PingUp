@@ -1,5 +1,21 @@
 import { useState } from 'react';
 
+// Extracting shared styles to keep code clean and DRY
+const clearButtonBaseStyle = {
+  background: 'rgba(255,255,255,0.1)',
+  border: 'none',
+  cursor: 'pointer',
+  color: 'var(--text-muted)',
+  fontSize: '12px',
+  width: '22px',
+  height: '22px',
+  borderRadius: '50%',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  transition: 'background-color 0.2s, opacity 0.2s'
+};
+
 export default function FriendsPanel({ onlineUsers }) {
   const [tab, setTab] = useState('online');
   const [search, setSearch] = useState('');
@@ -96,6 +112,23 @@ export default function FriendsPanel({ onlineUsers }) {
               }
             />
 
+            {/* Clear Button for Add Friend Input */}
+            {addFriendInput.trim().length > 0 && (
+              <button
+                type="button"
+                aria-label="Clear username input"
+                onClick={() => setAddFriendInput('')}
+                style={{
+                  ...clearButtonBaseStyle,
+                  marginLeft: '8px'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+              >
+                ✕
+              </button>
+            )}
+
             <button
               style={{
                 backgroundColor:
@@ -133,15 +166,34 @@ export default function FriendsPanel({ onlineUsers }) {
       ) : (
         <>
           {/* ── Search ── */}
-          <div className="fp-search-wrap">
+          <div className="fp-search-wrap" style={{ position: 'relative' }}>
             <input
               className="fp-search"
               placeholder="Search"
               value={search}
-              onChange={(e) =>
-                setSearch(e.target.value)
-              }
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ paddingRight: '35px' }}
             />
+
+            {/* Clear Button for Main Search */}
+            {search.trim().length > 0 && (
+              <button
+                type="button"
+                aria-label="Clear search input"
+                onClick={() => setSearch('')}
+                style={{
+                  ...clearButtonBaseStyle,
+                  position: 'absolute',
+                  right: '10px',
+                  top: '50%',
+                  transform: 'translateY(-50%)'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+              >
+                ✕
+              </button>
+            )}
           </div>
 
           {/* ── List ── */}

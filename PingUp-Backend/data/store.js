@@ -8,7 +8,7 @@ const ROLES = {
 };
 
 const ROLE_WEIGHTS = {
-  [ROLES.OWNER]: 3,
+  [ROLES.ADMIN]: 3,
   [ROLES.MODERATOR]: 2,
   [ROLES.MEMBER]: 1,
 };

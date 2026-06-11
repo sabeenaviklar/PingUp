@@ -19,6 +19,8 @@ export default function MessageList({
   const [editText, setEditText] = useState('');
   const [showEditHistory, setShowEditHistory] = useState(null);
   const [threadReplyText, setThreadReplyText] = useState('');
+  const [hoveredReply, setHoveredReply] = useState(null);
+  const [editingReplyId, setEditingReplyId] = useState(null);
   const bottomRef = useRef(null);
   const isMod = ['owner', 'moderator'].includes(currentUser?.role);
 
@@ -233,7 +235,21 @@ export default function MessageList({
                   </div>
                 </div>
               ) : (
-                <div className="msg-text">{msg.text}</div>
+                <div className="msg-text">
+  {msg.text}
+  {msg.imageUrl && (
+    <img
+      src={msg.imageUrl}
+      alt="shared image"
+      style={{ display: 'block', maxWidth: '300px', maxHeight: '300px', marginTop: '8px', borderRadius: '8px', cursor: 'pointer' }}
+      onClick={() => {
+      if (typeof msg.imageUrl !== 'string') return;
+      if (!msg.imageUrl.startsWith('/uploads/')) return;
+      window.open(msg.imageUrl, '_blank', 'noopener,noreferrer');
+    }}
+    />
+  )}
+</div>
               )}
               {msg.reactions?.length > 0 && (
   <div className="msg-reactions">
@@ -361,20 +377,81 @@ export default function MessageList({
     </div>
 
     <div className="msg-thread-replies">
-      {threadReplies.map(reply => (
-        <div key={reply.id} className="msg-thread-reply">
-
-          <div className="msg-thread-reply-user">
-            {reply.username}
-          </div>
-
-          <div className="msg-thread-reply-text">
-            {reply.text}
-          </div>
-
+    {threadReplies.map(reply => (
+      <div
+        key={reply.id}
+        className={`msg-thread-reply ${reply.deleted ? 'msg-deleted' : ''}`}
+        onMouseEnter={() => setHoveredReply(reply.id)}
+        onMouseLeave={() => setHoveredReply(null)}
+      >
+        {/* Reply header */}
+        <div className="msg-thread-reply-user">
+          {reply.username}
+          {reply.editedAt && (
+            <span className="msg-edited-tag" title="Edited">✏️ edited</span>
+          )}
         </div>
-      ))}
-    </div>
+
+        {/* Edit mode or display mode */}
+        {editingReplyId === reply.id ? (
+          <div className="msg-edit-input-container">
+            <textarea
+              className="msg-edit-input"
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              autoFocus
+            />
+            <div className="msg-edit-buttons">
+              <button
+                className="msg-edit-btn msg-edit-save"
+                onClick={() => {
+                  handleEditSave(reply.id);
+                  setEditingReplyId(null);
+                }}
+              >Save</button>
+              <button
+                className="msg-edit-btn msg-edit-cancel"
+                onClick={() => {
+                  handleEditCancel();
+                  setEditingReplyId(null);
+                }}
+              >Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <div className="msg-thread-reply-text">
+            {reply.deleted ? '[message deleted]' : reply.text}
+          </div>
+        )}
+
+        {/* Toolbar — appears on hover, hidden if deleted */}
+        {!reply.deleted && hoveredReply === reply.id && (
+          <div className="msg-toolbar">
+            {/* Edit — visible to author or mods */}
+            {(reply.userId === currentUser?.id || isMod) && editingReplyId !== reply.id && (
+              <button
+                className="msg-toolbar-btn"
+                title="Edit reply"
+                onClick={() => {
+                  setEditingReplyId(reply.id);
+                  setEditText(reply.text);
+                }}
+              >✏️</button>
+            )}
+            {/* Delete — visible to mods only */}
+            {isMod && (
+              <button
+                className="msg-toolbar-btn msg-toolbar-btn-delete"
+                title="Delete reply"
+                onClick={() => handleDelete(reply.id)}
+              >🗑️</button>
+            )}
+          </div>
+        )}
+
+      </div>
+    ))}
+  </div>
 
     <div className="msg-thread-input-wrap">
 

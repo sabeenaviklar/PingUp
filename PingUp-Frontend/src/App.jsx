@@ -215,6 +215,16 @@ const [threadReplies, setThreadReplies] = useState([]);
       alert(`You were kicked by ${by}.`);
       handleLogout();
     });
+    socket.on('channel:kicked', ({ channelId, reason }) => {
+      if (activeChannel?.id === channelId) {
+        setActiveChannel(null);
+        setMessages([]);
+        setRoomSettings(null);
+        setNotifications([]);
+        setCommandResps([]);
+        alert(reason || 'This channel is now private.');
+      }
+    });
     socket.on('error:permission', msg =>
       setCommandResps(prev => [...prev, { type: 'error', text: `⛔ ${msg}` }])
     );

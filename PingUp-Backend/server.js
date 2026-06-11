@@ -93,6 +93,29 @@ async function broadcastUserList() {
     const users = await User.find({ _id: { $in: onlineUserIds } });
     io.emit('users:update', users.map(u => u.toSafeObject()));
 }
+// Evict sockets from a channel room if the channel just became private
+// and they are no longer authorized.
+async function evictUnauthorizedSockets(room) {
+    if (!room.isPrivate) return; // only act when it IS now private
+
+    const roomSockets = await io.in(room._id.toString()).fetchSockets();
+    const allowedSet = new Set(room.allowedUsers.map(id => id.toString()));
+
+    for (const s of roomSockets) {
+        const isOwnerOrAdmin =
+            s.user?.role === ROLES.OWNER || s.user?.role === ROLES.ADMIN;
+        if (isOwnerOrAdmin) continue; // owners/admins always keep access
+
+        const isAllowed = allowedSet.has(s.user?.id?.toString());
+        if (!isAllowed) {
+            s.leave(room._id.toString());
+            s.emit('channel:kicked', {
+                channelId: room._id.toString(),
+                reason: 'This channel has been made private.',
+            });
+        }
+    }
+}
 
 async function broadcastStructure() {
     const rooms = await Room.find().sort({ category: 1, order: 1, createdAt: 1 });
@@ -698,6 +721,7 @@ async function processCommand(socket, roomName, text) {
             if (!room) return err(`#${args[0]} not found.`);
             room.isPrivate = !room.isPrivate;
             await room.save();
+            await evictUnauthorizedSockets(room);
             await broadcastStructure();
             ok(`#${room.name} is now ${room.isPrivate ? 'private 👁️' : 'public 🌐'}.`);
             break;
@@ -1102,6 +1126,7 @@ replyCount: 0, imageUrl: imageUrl || null,
         if (!room) return;
         room.isPrivate = !room.isPrivate;
         await room.save();
+        await evictUnauthorizedSockets(room);
         await broadcastStructure();
         socket.emit('command:response', {
             type: 'success',

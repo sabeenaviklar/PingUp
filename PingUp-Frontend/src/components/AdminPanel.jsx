@@ -1,23 +1,45 @@
 import { useState, useEffect } from 'react';
+import { getApiUrl } from '../api';
 
-export default function AdminPanel({ currentUser, socket, categories, onlineUsers, token, onClose,allowUserChannelCreation }) {
+export default function AdminPanel({ currentUser, socket, categories, token, onClose, allowUserChannelCreation }) {
   const [tab,         setTab]         = useState('channels'); // 'channels' | 'users' | 'roles'
   const [allUsers,    setAllUsers]    = useState([]);
   const [loadingUsers,setLoadingUsers]= useState(false);
   const [notification,setNotification]= useState('');
+  const [settings,    setSettings]    = useState({
+    allowUserChannelCreation: allowUserChannelCreation ?? true,
+  });
 
-  const isOwner = currentUser?.role === 'owner';
 
   // Fetch all users for user management
   useEffect(() => {
     if (tab !== 'users' && tab !== 'roles') return;
-    setLoadingUsers(true);
-    fetch('https://pingup-backend-1.onrender.com/api/users', {
+    
+    let isMounted = true;
+    const timer = setTimeout(() => {
+      if (isMounted) setLoadingUsers(true);
+    }, 0);
+
+    fetch(getApiUrl('/api/users'), {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(data => { setAllUsers(data); setLoadingUsers(false); })
-      .catch(() => setLoadingUsers(false));
+      .then(data => {
+        if (isMounted) {
+          setAllUsers(data);
+          setLoadingUsers(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setLoadingUsers(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
   }, [tab, token]);
 
   function notify(msg) {
@@ -68,7 +90,6 @@ export default function AdminPanel({ currentUser, socket, categories, onlineUser
     notify(`Banned ${username}`);
   }
 
-  const allChannels = (categories || []).flatMap(c => c.channels);
 
   return (
     <div className="admin-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -342,16 +363,18 @@ export default function AdminPanel({ currentUser, socket, categories, onlineUser
                   </span>
                 </div>
                 <button
-                  className={`admin-toggle ${allowUserChannelCreation ? 'on' : 'off'}`}
+                  className={`admin-toggle ${settings.allowUserChannelCreation ? 'on' : 'off'}`}
                   onClick={() => {
+                    const newValue = !settings.allowUserChannelCreation;
+                    setSettings(prev => ({ ...prev, allowUserChannelCreation: newValue }));
                     socket?.emit('settings:update', {
                       key: 'allowUserChannelCreation',
-                      value: !allowUserChannelCreation,
+                      value: newValue,
                     });
-                    notify(`Channel creation ${!allowUserChannelCreation ? 'enabled' : 'disabled'} for all users`);
+                    notify(`Channel creation ${newValue ? 'enabled' : 'disabled'} for all users`);
                   }}
                 >
-                  {allowUserChannelCreation ? '✅ ON' : '❌ OFF'}
+                  {settings.allowUserChannelCreation ? '✅ ON' : '❌ OFF'}
                 </button>
               </div>
             </div>

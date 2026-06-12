@@ -20,7 +20,6 @@ const CHANNEL_EMOJIS = ['💬','🌿','⚙️','📢','🎲','💡','📋','🔒
 
 export default function DMSidebar({
   currentUser,
-  onlineUsers,
   activeRoom,
   activeChannel,
   rooms,
@@ -46,8 +45,7 @@ export default function DMSidebar({
   const [chForm,          setChForm]          = useState({ name: '', description: '', emoji: '💬' });
 
   const isOwner = currentUser?.role === 'owner';
-  const isMod   = ['owner', 'moderator'].includes(currentUser?.role);
-  const canCreateChannel = isOwner || allowUserChannelCreation;
+  const canCreateChannel = isOwner || !!allowUserChannelCreation;
 
   // ── Derive display list ─────────────────────────────────────────
   const displayCategories = (() => {

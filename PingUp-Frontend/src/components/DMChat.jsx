@@ -1,5 +1,24 @@
-import { useState, useEffect, useRef } from 'react';
-import { emitWithRetry, generateClientId } from '../socket';
+import { useState, useEffect, useRef, } from 'react';
+import { getApiUrl } from '../api';
+
+// Generate a temporary client-side ID for optimistic message rendering
+function generateClientId() {
+  return `client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Emit a socket event and invoke callback with the server's acknowledgement.
+// Falls back to a "sent" response after a short delay if the server doesn't ack.
+function emitWithRetry(socket, event, data, callback) {
+  let settled = false;
+  const settle = (res) => {
+    if (settled) return;
+    settled = true;
+    callback?.(res);
+  };
+  socket.emit(event, data, (res) => settle(res || {}));
+  // If no ack within 5 s, treat as sent (server may not support acks)
+  setTimeout(() => settle({}), 5000);
+}
 
 export default function DMChat({ currentUser, otherUser, token, socket, onClose }) {
   const [messages, setMessages]       = useState([]);
@@ -15,18 +34,21 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
     inputRef.current?.focus();
   }, [otherUser?.id]);
 
+  const otherUserId = otherUser?.id;
+  const currentUsername = currentUser?.username;
+
   // Load history + join DM room
   useEffect(() => {
-    if (!otherUser || !token) return;
+    if (!otherUserId || !token) return;
 
-    fetch(`https://pingup-backend-1.onrender.com/api/dm/${otherUser.id}`, {
+    fetch(getApiUrl(`/api/dm/${otherUserId}`), {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
       .then(data => setMessages(Array.isArray(data) ? data : []))
       .catch(() => { });
 
-    socket.emit('dm:join', { otherUserId: otherUser.id });
+    socket.emit('dm:join', { otherUserId });
 
     const onMessage = (msg) => {
       setMessages(prev => {
@@ -38,7 +60,7 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
       });
     };
     const onTyping = ({ username, typing }) => {
-      if (username !== currentUser.username) setIsTyping(typing);
+      if (username !== currentUsername) setIsTyping(typing);
     };
     const onRead = () => {
       setMessages(prev => prev.map(m => ({ ...m, read: true })));
@@ -53,7 +75,7 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
       socket.off('dm:typing', onTyping);
       socket.off('dm:read', onRead);
     };
-  }, [otherUser?.id, currentUser?.username, socket, token]); // Added missing dependencies
+  }, [otherUserId, token, socket, currentUsername]);
 
   // Auto scroll
   useEffect(() => {
@@ -82,10 +104,10 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
     // Maintain focus after sending (removed unnecessary setTimeout)
     inputRef.current?.focus();
 
-    emitWithRetry('dm:send', {
+    emitWithRetry(socket, 'dm:send', {
       toUserId: otherUser.id,
       text: trimmed,
-      clientId // <-- Send to backend for idempotency
+      clientId // ← Send to backend for idempotency
     }, (res) => {
       if (res.error) {
         setMessages(prev => prev.map(m =>
@@ -93,7 +115,7 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
         ))
       } else {
         setMessages(prev => prev.map(m =>
-          m.id === clientId ? { ...m, id: res.id, status: 'sent' } : m
+          m.id === clientId ? { ...m, id: res.id || m.id, status: 'sent' } : m
         ));
       }
     });

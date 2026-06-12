@@ -32,7 +32,7 @@ export default function MessageInput({
     }
   }, [roomName, isDisabled]);
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     let imageUrl = null;
     
     // Handle Image Upload First
@@ -47,7 +47,7 @@ export default function MessageInput({
           throw new Error('Upload failed');
         }
         imageUrl = data.imageUrl;
-      } catch (err) {
+      } catch {
         alert('Image upload failed');
         setUploading(false);
         return;
@@ -74,7 +74,7 @@ export default function MessageInput({
 
     // Restore focus after sending (auto-focus feature)
     setTimeout(() => inputRef.current?.focus(), 0);
-  };
+  }, [text, imageFile, onSend, onTypingStop]);
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -82,7 +82,7 @@ export default function MessageInput({
       if (uploading || (!text.trim() && !imageFile) || isDisabled) return;
       handleSend();
     }
-  }, [text, isDisabled, imageFile, uploading]);
+  }, [text, isDisabled, imageFile, uploading, handleSend]);
 
   const handleChange = useCallback((e) => {
     setText(e.target.value);

@@ -1,17 +1,19 @@
 import { useState } from 'react';
+import { getApiUrl } from '../api';
 
 export default function ProfileModal({ user, onClose, setCurrentUser }) {
-  const API_URL = import.meta.env.VITE_API_URL;
   const [tab, setTab] = useState('security');
   const [editing, setEditing] = useState(null); // 'displayName' | 'username' | 'email' | 'phone'
   const [fields, setFields] = useState({
-    displayName: user.displayName || '',
-    username:    user.username || '',
-    email:       user.email || '',
-    phone:       user.phone || '',
+    displayName: user?.displayName || user?.username || '',
+    username:    user?.username || '',
+    email:       user?.email || '',
+    phone:       user?.phone || '',
   });
   const [tempVal, setTempVal] = useState('');
   const [revealed, setRevealed] = useState({ email: false, phone: false });
+
+  if (!user) return null;
 
   const bannerGradient = {
     admin:     'linear-gradient(135deg, #3a1f1f 0%, #1a0a0a 100%)',
@@ -29,7 +31,7 @@ export default function ProfileModal({ user, onClose, setCurrentUser }) {
       const patch = { [editing]: tempVal.trim() };
       try{
         const token = localStorage.getItem('token');
-        const res = await fetch(`${API_URL}/api/profile`, { method: 'PUT',
+        const res = await fetch(getApiUrl('/api/profile'), { method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,

@@ -60,15 +60,13 @@ export default function VoiceChannel({
   channel,
   currentUser,
   socket,
-  onlineUsers,
-  onLeave,
 }) {
   const [joined,        setJoined]        = useState(false);
   const [playing,       setPlaying]       = useState(null);   // track id
   const [voiceMembers,  setVoiceMembers]  = useState([]);
   const [volume,        setVolume]        = useState(80);
   const [iframeKey,     setIframeKey]     = useState(0);      // force remount on track change
-  const [showPlaylist,  setShowPlaylist]  = useState(false);
+  const [,              setShowPlaylist]  = useState(false);
   const [muted,         setMuted]         = useState(false);
   const iframeRef = useRef(null);
 

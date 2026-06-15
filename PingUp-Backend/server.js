@@ -30,6 +30,8 @@ const DirectMessage = require('./models/DirectMessage');
 const { generateToken, socketAuthMiddleware, verifyToken, generateRefreshToken } = require('./middleware/auth');
 const { ROLES, hasPermission } = require('./data/store'); // <-- IMPORTED WEIGHT SYSTEM
 
+const MAX_MESSAGE_LENGTH = 2000;
+
 const ServerSettings = require('./models/ServerSettings');
 const app = express();
 const server = http.createServer(app);
@@ -1330,6 +1332,102 @@ io.on('connection', async (socket) => {
                             user => user !== socket.user.username
                         );
 
+  // Send filtered structure on connect
+  const rooms = await Room.find().sort({ category: 1, order: 1, createdAt: 1 });
+  const categoryMap = new Map();
+  for (const r of rooms) {
+    if (r.isPrivate && dbUser.role === ROLES.MEMBER) continue;
+    const catKey = r.category || 'general';
+    if (!categoryMap.has(catKey))
+      categoryMap.set(catKey, { id: `cat-${catKey}`, name: catKey, channels: [] });
+    categoryMap.get(catKey).channels.push(roomToChannel(r));
+  }
+  socket.emit('structure:update', [...categoryMap.values()]);
+  console.log(`[+] ${socket.user.username} (${socket.user.role})`);
+
+  // ── Join channel (by name) ─────────────────────────────────────
+  socket.on('room:join', safeSocketHandler(socket, 'room:join', async ({ roomName }) => {
+    const room = await Room.findOne({ name: roomName });
+    if (!room) return socket.emit('error:general', 'Channel not found.');
+    if (room.isPrivate && dbUser.role === ROLES.MEMBER) {
+      const allowed = room.allowedUsers.map(id => id.toString()).includes(socket.user.id);
+      if (!allowed) return socket.emit('error:permission', 'This channel is private.');
+    }
+    ;[...socket.rooms].forEach(r => { if (r !== socket.id) socket.leave(r); });
+    socket.join(roomName);
+    socket.currentRoom = roomName;
+    const history = await Message.find({ roomName, deleted: false })
+      .sort({ createdAt: -1 }).limit(50).lean();
+    const pinnedIds = room.pinnedMessages.map(id => id.toString());
+    socket.emit('room:history', {
+      roomName,
+      messages: history.reverse().map(m => ({
+        id: m._id.toString(), userId: m.userId.toString(),
+        username: m.username, role: m.role, text: m.text,
+        timestamp: m.createdAt, deleted: m.deleted,
+        pinned: pinnedIds.includes(m._id.toString()),
+        editedAt: m.editedAt,
+        editHistory: m.editHistory,
+      })),
+      roomSettings: roomToChannel(room),
+    });
+    io.to(roomName).emit('room:notification', {
+      text: `${socket.user.username} joined #${roomName}`, type: 'join',
+    });
+  }, 'Failed to join channel.'));
+
+  // ── Join channel (by ID) ───────────────────────────────────────
+  socket.on('channel:join', safeSocketHandler(socket, 'channel:join', async ({ channelId }) => {
+    const room = await Room.findById(channelId);
+    if (!room) return socket.emit('error:general', 'Channel not found.');
+    if (room.isPrivate && dbUser.role === ROLES.MEMBER) {
+      const allowed = room.allowedUsers.map(id => id.toString()).includes(socket.user.id);
+      if (!allowed) return socket.emit('error:permission', 'This channel is private.');
+    }
+    ;[...socket.rooms].forEach(r => { if (r !== socket.id) socket.leave(r); });
+    socket.join(channelId);
+    socket.currentRoom = room.name;
+    socket.currentChannelId = channelId;
+    const history = await Message.find({ roomName: room.name, deleted: false })
+      .sort({ createdAt: -1 }).limit(50).lean();
+    const pinnedIds = room.pinnedMessages.map(id => id.toString());
+    socket.emit('channel:history', {
+      channelId,
+      messages: history.reverse().map(m => ({
+        id: m._id.toString(), userId: m.userId.toString(),
+        username: m.username, role: m.role, text: m.text,
+        timestamp: m.createdAt, deleted: m.deleted,
+        pinned: pinnedIds.includes(m._id.toString()),
+        editedAt: m.editedAt,
+        editHistory: m.editHistory,
+      })),
+      roomSettings: roomToChannel(room),
+    });
+  }, 'Failed to join channel.'));
+
+  // ── Send message ───────────────────────────────────────────────
+  socket.on('message:send', safeSocketHandler(socket, 'message:send', async ({ roomName, channelId, text }) => {
+    const trimmed = text?.trim();
+
+if (!trimmed) return;
+
+if (trimmed.length > MAX_MESSAGE_LENGTH) {
+
+  return socket.emit(
+    'error:general',
+    `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters.`
+  );
+}
+
+    let resolvedRoom = roomName;
+    let room = null;
+    if (channelId) {
+      room = await Room.findById(channelId);
+      resolvedRoom = room?.name;
+    } else {
+      room = await Room.findOne({ name: roomName });
+    }
+    if (!resolvedRoom || !room) return;
                         // remove empty emoji group
                         if (reaction.users.length === 0) {
                             message.reactions = message.reactions.filter(
@@ -1538,6 +1636,50 @@ io.on('connection', async (socket) => {
         socket.dmTypingIn = `dm:${convId}`;
         socket.to(`dm:${convId}`).emit('dm:typing', { username: socket.user.username, typing: true });
     });
+  }, 'Failed to join voice channel.'));
+
+  socket.on('voice:leave', ({ channelId }) => {
+    socket.leave(`voice:${channelId}`);
+    socket.currentVoice = null;
+    io.to(`voice:${channelId}`).emit('voice:left', { userId: socket.user.id });
+  });
+
+  // ── DMs ────────────────────────────────────────────────────────
+  socket.on('dm:join', safeSocketHandler(socket, 'dm:join', async ({ otherUserId }) => {
+    const convId = [socket.user.id, otherUserId].sort().join('_');
+    socket.join(`dm:${convId}`);
+    socket.currentDM = convId;
+    await DirectMessage.updateMany(
+      { conversationId: convId, senderId: { $ne: socket.user.id }, read: false },
+      { read: true }
+    );
+    const otherSocket = [...io.sockets.sockets.values()].find(s => s.user?.id === otherUserId);
+    if (otherSocket) otherSocket.emit('dm:read', { conversationId: convId });
+  }, 'Failed to open direct message.'));
+
+  socket.on('dm:send', safeSocketHandler(socket, 'dm:send', async ({ toUserId, text }) => {
+    const trimmed = text?.trim();
+
+if (!trimmed) return;
+
+if (trimmed.length > MAX_MESSAGE_LENGTH) {
+  return socket.emit(
+    'error:general',
+    `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters.`
+  );
+}
+    const toUser = await User.findById(toUserId);
+    if (!toUser) return socket.emit('error:general', 'User not found.');
+    const convId = [socket.user.id, toUserId].sort().join('_');
+    const freshUser = await User.findById(socket.user.id);
+    const msg = await DirectMessage.create({
+      conversationId: convId,
+      participants: [socket.user.id, toUserId],
+      senderId: socket.user.id,
+      senderUsername: socket.user.username,
+      senderRole: freshUser.role,
+      text: trimmed,
+      read: false,
     socket.on('dm:typing:stop', ({ toUserId }) => {
         const convId = [socket.user.id, toUserId].sort().join('_');
         socket.dmTypingIn = null;

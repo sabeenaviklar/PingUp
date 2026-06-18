@@ -1,9 +1,16 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { getApiUrl } from '../api';
 import { useDraftMessage } from '../hooks/useDraftMessage';
 
 export default function MessageInput({
-  onSend, onTypingStart, onTypingStop,
-  roomName, roomSettings, currentUser, channelId,
+  onSend,
+  onTypingStart,
+  onTypingStop,
+  roomName,
+  roomSettings,
+  currentUser,
+  channelId,
+  token,
 }) {
   const { text, setText, clearDraft } = useDraftMessage('channel', channelId);
   const [imagePreview, setImagePreview] = useState(null);
@@ -42,7 +49,13 @@ export default function MessageInput({
       const formData = new FormData();
       formData.append('image', imageFile);
       try {
-        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        const res = await fetch(getApiUrl('/api/upload'), {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
         const data = await res.json();
         if (!res.ok || !data?.imageUrl) {
           throw new Error('Upload failed');

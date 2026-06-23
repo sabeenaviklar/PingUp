@@ -250,7 +250,11 @@ Then set your real values in `PingUp-Backend/.env`:
 Start the backend server:
 
 ```bash
-npm run dev OR node server.js
+# Run in development mode (auto-restarts on changes)
+npm run dev
+
+# OR run in standard mode
+node server.js
 ```
 
 You should see:

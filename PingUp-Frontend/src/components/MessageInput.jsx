@@ -1,11 +1,18 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { getApiUrl } from '../api';
+import { useDraftMessage } from '../hooks/useDraftMessage';
 
 export default function MessageInput({
-  onSend, onTypingStart, onTypingStop,
-  roomName, roomSettings, currentUser, token,
+  onSend,
+  onTypingStart,
+  onTypingStop,
+  roomName,
+  roomSettings,
+  currentUser,
+  channelId,
+  token,
 }) {
-  const [text, setText] = useState('');
+  const { text, setText, clearDraft } = useDraftMessage('channel', channelId);
   const [imagePreview, setImagePreview] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -67,8 +74,8 @@ export default function MessageInput({
     // Send the message
     onSend(text.trim(), imageUrl);
     
-    // Reset inputs and state
-    setText('');
+    // Clear draft and reset inputs
+    clearDraft();
     setImageFile(null);
     setImagePreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -81,7 +88,7 @@ export default function MessageInput({
 
     // Restore focus after sending (auto-focus feature)
     setTimeout(() => inputRef.current?.focus(), 0);
-  }, [text, imageFile, onSend, onTypingStop]);
+  }, [text, imageFile, onSend, onTypingStop, clearDraft]);
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -92,17 +99,21 @@ export default function MessageInput({
   }, [text, isDisabled, imageFile, uploading, handleSend]);
 
   const handleChange = useCallback((e) => {
-    setText(e.target.value);
+    const newText = e.target.value;
+    setText(newText);
+
     if (!typingRef.current) {
       typingRef.current = true;
       onTypingStart();
     }
+
     clearTimeout(typingTimer.current);
+
     typingTimer.current = setTimeout(() => {
       typingRef.current = false;
       onTypingStop();
     }, 1500);
-  }, [onTypingStart, onTypingStop]);
+  }, [setText, onTypingStart, onTypingStop]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, } from 'react';
 import { getApiUrl } from '../api';
+import { useDraftMessage } from '../hooks/useDraftMessage';
 
 // Generate a temporary client-side ID for optimistic message rendering
 function generateClientId() {
@@ -22,7 +23,7 @@ function emitWithRetry(socket, event, data, callback) {
 
 export default function DMChat({ currentUser, otherUser, token, socket, onClose }) {
   const [messages, setMessages]       = useState([]);
-  const [text, setText]               = useState('');
+  const { text, setText, clearDraft } = useDraftMessage('dm', otherUser?.id);
   const [typing, setTyping]           = useState(false);
   const [isTyping, setIsTyping]       = useState(false);
   const bottomRef                     = useRef(null);
@@ -103,7 +104,7 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
     };
 
     setMessages(prev => [...prev, optMsg]);
-    setText('');
+    clearDraft();
     
     // Maintain focus after sending (removed unnecessary setTimeout)
     inputRef.current?.focus();

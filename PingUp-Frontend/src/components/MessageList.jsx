@@ -3,6 +3,9 @@ import { useState, useEffect, useRef } from 'react';
 export default function MessageList({
   messages,
   notifications,
+  selectedThread,
+  threadReplies,
+  onOpenThread,
   commandResponses,
   typingUsers,
   currentUser,
@@ -15,6 +18,10 @@ export default function MessageList({
   const [editingMsgId, setEditingMsgId] = useState(null);
   const [editText, setEditText] = useState('');
   const [showEditHistory, setShowEditHistory] = useState(null);
+  const [threadReplyText, setThreadReplyText] = useState('');
+  const [hoveredReply, setHoveredReply] = useState(null);
+  const [editingReplyId, setEditingReplyId] = useState(null);
+  const [showPinnedSidebar, setShowPinnedSidebar] = useState(false);
   const bottomRef = useRef(null);
   const isMod = ['owner', 'moderator'].includes(currentUser?.role);
 
@@ -22,6 +29,7 @@ export default function MessageList({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
 
   function handleDelete(msgId) {
     if (!confirm('Delete this message?')) return;
@@ -31,6 +39,13 @@ export default function MessageList({
   function handlePin(msgId) {
     socket?.emit('message:pin', { channelId, roomName, messageId: msgId });
   }
+
+  function handleReaction(msgId, emoji) {
+  socket?.emit('message:reaction', {
+    messageId: msgId,
+    emoji,
+  });
+}
 
   function handleEditStart(msg) {
     setEditingMsgId(msg.id);
@@ -59,9 +74,100 @@ export default function MessageList({
 
   const pinnedMessages = messages.filter(m => m.pinned && !m.deleted);
 
+  const mainMessages = messages.filter(
+  (msg) => !msg.parentMessageId
+);
+
   return (
     <div className="msg-list">
 
+  {showPinnedSidebar && (
+    <>
+      <div
+        className="msg-pinned-overlay"
+        onClick={() => setShowPinnedSidebar(false)}
+      />
+
+      <div className="msg-pinned-sidebar">
+        <div className="msg-pinned-sidebar-header">
+          <h3>📌 Pinned Messages</h3>
+
+          <button
+            className="msg-pinned-close"
+            onClick={() => setShowPinnedSidebar(false)}
+          >
+            ✕
+          </button>
+        </div>
+
+        {pinnedMessages.length === 0 ? (
+          <div className="msg-pinned-empty">
+            <p>📌 No pinned messages in this channel</p>
+          </div>
+        ) : (
+          pinnedMessages.map((msg) => (
+            <div
+            key={msg.id}
+            className="msg-pinned-sidebar-item"
+            role="button"
+            tabIndex={0}
+            onClick={(e) => {
+              e.stopPropagation();
+          
+              document
+                .getElementById(`message-${msg.id}`)
+                ?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                });
+          
+              setShowPinnedSidebar(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+          
+                document
+                  .getElementById(`message-${msg.id}`)
+                  ?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                  });
+          
+                setShowPinnedSidebar(false);
+              }
+            }}
+          >
+              <strong>{msg.username}</strong>
+
+              <span className="msg-pinned-time">
+                {new Date(msg.timestamp).toLocaleString()}
+              </span>
+
+              <p>
+                {(msg.text || "").length > 100
+                  ? (msg.text || "").slice(0, 100) + "..."
+                  : msg.text}
+              </p>
+
+              {isMod && (
+                <button
+                  className="msg-pinned-unpin"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePin(msg.id);
+                  }}
+                >
+                  Unpin
+                </button>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </>
+  )}
       {/* ── Edit History Modal ── */}
       {showEditHistory && (
         <div className="msg-edit-history-overlay" onClick={() => setShowEditHistory(null)}>
@@ -102,9 +208,16 @@ export default function MessageList({
           </div>
         </div>
       )}
-
+      <div className="msg-pinned-toolbar">
+      <button
+    className="msg-pinned-toggle-btn"
+    onClick={() => setShowPinnedSidebar(v => !v)}
+  >
+     📌 Pinned ({pinnedMessages.length})
+   </button>
+</div>
       {/* ── Pinned messages banner ── */}
-      {pinnedMessages.length > 0 && (
+      {/* {pinnedMessages.length > 0 && (
         <div className="msg-pinned-banner">
           <span className="msg-pinned-label">📌 {pinnedMessages.length} pinned</span>
           <div className="msg-pinned-list">
@@ -123,17 +236,43 @@ export default function MessageList({
             ))}
           </div>
         </div>
-      )}
+      )} */}
 
       {/* ── Room status badges ── */}
-      {(roomSettings?.isReadOnly || roomSettings?.isLocked || roomSettings?.isPrivate) && (
-        <div className="msg-room-status-row">
-          {roomSettings.isReadOnly && <span className="msg-room-badge badge-readonly">🔇 Read-only</span>}
-          {roomSettings.isLocked   && <span className="msg-room-badge badge-locked">🔒 Locked</span>}
-          {roomSettings.isPrivate  && <span className="msg-room-badge badge-private">👁️ Private</span>}
-        </div>
-      )}
+      {(
+  roomSettings?.isReadOnly ||
+  roomSettings?.isLocked ||
+  roomSettings?.isPrivate ||
+  roomSettings?.slowModeSeconds > 0
+) && (
+  <div className="msg-room-status-row">
 
+    {roomSettings.isReadOnly && (
+      <span className="msg-room-badge badge-readonly">
+        🔇 Read-only
+      </span>
+    )}
+
+    {roomSettings.isLocked && (
+      <span className="msg-room-badge badge-locked">
+        🔒 Locked
+      </span>
+    )}
+
+    {roomSettings.isPrivate && (
+      <span className="msg-room-badge badge-private">
+        👁️ Private
+      </span>
+    )}
+
+    {roomSettings?.slowModeSeconds > 0 && (
+      <span className="msg-room-badge badge-slowmode">
+        🐢 Slow Mode ({roomSettings.slowModeSeconds}s)
+      </span>
+    )}
+
+  </div>
+)}
       {/* ── Notifications ── */}
       {notifications.map((n, i) => (
         <div key={i} className="msg-notification">{n}</div>
@@ -141,13 +280,15 @@ export default function MessageList({
 
       {/* ── Messages ── */}
       <div className="msg-messages-wrap">
-        {messages.map(msg => (
+
+        {mainMessages.map(msg => (
           <div
-            key={msg.id}
-            className={`msg-row ${msg.deleted ? 'msg-deleted' : ''} ${msg.pinned && !msg.deleted ? 'msg-is-pinned' : ''}`}
-            onMouseEnter={() => setHoveredMsg(msg.id)}
-            onMouseLeave={() => setHoveredMsg(null)}
-          >
+          id={`message-${msg.id}`}
+          key={msg.id}
+          className={`msg-row ${msg.deleted ? 'msg-deleted' : ''} ${msg.pinned && !msg.deleted ? 'msg-is-pinned' : ''}`}
+          onMouseEnter={() => setHoveredMsg(msg.id)}
+          onMouseLeave={() => setHoveredMsg(null)}
+        >
             {/* Avatar */}
             <div className={`msg-avatar msg-avatar-role-${msg.role}`}>
               {msg.username?.[0]?.toUpperCase()}
@@ -176,6 +317,16 @@ export default function MessageList({
                     ✏️ edited
                   </span>
                 )}
+                {msg.replyCount > 0 && (
+  <span
+    className="msg-thread-badge"
+    onClick={() => {
+  onOpenThread(msg);
+}}
+  >
+    💬 {msg.replyCount} repl{msg.replyCount > 1 ? 'ies' : 'y'}
+  </span>
+)}
                 {msg.pinned && !msg.deleted && (
                   <span className="msg-pin-tag">📌 pinned</span>
                 )}
@@ -189,6 +340,7 @@ export default function MessageList({
                     value={editText}
                     onChange={(e) => setEditText(e.target.value)}
                     autoFocus
+                    maxLength={2000}
                   />
                   <div className="msg-edit-buttons">
                     <button
@@ -206,8 +358,36 @@ export default function MessageList({
                   </div>
                 </div>
               ) : (
-                <div className="msg-text">{msg.text}</div>
+                <div className="msg-text">
+  {msg.text}
+  {msg.imageUrl && (
+    <img
+      src={msg.imageUrl}
+      alt="shared image"
+      style={{ display: 'block', maxWidth: '300px', maxHeight: '300px', marginTop: '8px', borderRadius: '8px', cursor: 'pointer' }}
+      onClick={() => {
+      if (typeof msg.imageUrl !== 'string') return;
+      if (!msg.imageUrl.startsWith('/uploads/')) return;
+      window.open(msg.imageUrl, '_blank', 'noopener,noreferrer');
+    }}
+    />
+  )}
+</div>
               )}
+              {msg.reactions?.length > 0 && (
+  <div className="msg-reactions">
+    {msg.reactions.map((reaction, idx) => (
+      <button
+        key={idx}
+        className="msg-reaction-chip"
+        onClick={() => handleReaction(msg.id, reaction.emoji)}
+      >
+        <span>{reaction.emoji}</span>
+        <span>{reaction.users.length}</span>
+      </button>
+    ))}
+  </div>
+)}
             </div>
 
             {/* Toolbar — appears on hover */}
@@ -221,6 +401,15 @@ export default function MessageList({
                     onClick={() => handleEditStart(msg)}
                   >✏️</button>
                 )}
+                <button
+  className="msg-toolbar-btn"
+  title="Reply to message"
+  onClick={() => {
+  onOpenThread(msg);
+}}
+>
+  ↩️
+</button>
                 {/* Pin button for mods */}
                 {isMod && (
                   <button
@@ -230,6 +419,31 @@ export default function MessageList({
                   >📌</button>
                 )}
                 {/* Delete button for mods */}
+
+                <button
+  className="msg-toolbar-btn"
+  title="React"
+  onClick={() => handleReaction(msg.id, '👍')}
+>
+  👍
+</button>
+
+<button
+  className="msg-toolbar-btn"
+  title="React"
+  onClick={() => handleReaction(msg.id, '😂')}
+>
+  😂
+</button>
+
+<button
+  className="msg-toolbar-btn"
+  title="React"
+  onClick={() => handleReaction(msg.id, '🔥')}
+>
+  🔥
+</button>
+
                 {isMod && (
                   <button
                     className="msg-toolbar-btn msg-toolbar-btn-delete"
@@ -260,6 +474,141 @@ export default function MessageList({
             </span>
           </div>
         )}
+
+        
+
+        {selectedThread && (
+  <div
+  className="msg-thread-panel"
+  
+>
+
+    <div className="msg-thread-header">
+      <h3>Thread</h3>
+
+      <button
+        className="msg-thread-close"
+        onClick={() => onOpenThread(null)}
+      >
+        ✕
+      </button>
+    </div>
+
+    <div className="msg-thread-parent">
+      <strong>{selectedThread.username}</strong>
+      
+      <p>{selectedThread.text}</p>
+    </div>
+
+    <div className="msg-thread-replies">
+    {threadReplies.map(reply => (
+      <div
+        key={reply.id}
+        className={`msg-thread-reply ${reply.deleted ? 'msg-deleted' : ''}`}
+        onMouseEnter={() => setHoveredReply(reply.id)}
+        onMouseLeave={() => setHoveredReply(null)}
+      >
+        {/* Reply header */}
+        <div className="msg-thread-reply-user">
+          {reply.username}
+          {reply.editedAt && (
+            <span className="msg-edited-tag" title="Edited">✏️ edited</span>
+          )}
+        </div>
+
+        {/* Edit mode or display mode */}
+        {editingReplyId === reply.id ? (
+          <div className="msg-edit-input-container">
+            <textarea
+              className="msg-edit-input"
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              autoFocus
+            />
+            <div className="msg-edit-buttons">
+              <button
+                className="msg-edit-btn msg-edit-save"
+                onClick={() => {
+                  handleEditSave(reply.id);
+                  setEditingReplyId(null);
+                }}
+              >Save</button>
+              <button
+                className="msg-edit-btn msg-edit-cancel"
+                onClick={() => {
+                  handleEditCancel();
+                  setEditingReplyId(null);
+                }}
+              >Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <div className="msg-thread-reply-text">
+            {reply.deleted ? '[message deleted]' : reply.text}
+          </div>
+        )}
+
+        {/* Toolbar — appears on hover, hidden if deleted */}
+        {!reply.deleted && hoveredReply === reply.id && (
+          <div className="msg-toolbar">
+            {/* Edit — visible to author or mods */}
+            {(reply.userId === currentUser?.id || isMod) && editingReplyId !== reply.id && (
+              <button
+                className="msg-toolbar-btn"
+                title="Edit reply"
+                onClick={() => {
+                  setEditingReplyId(reply.id);
+                  setEditText(reply.text);
+                }}
+              >✏️</button>
+            )}
+            {/* Delete — visible to mods only */}
+            {isMod && (
+              <button
+                className="msg-toolbar-btn msg-toolbar-btn-delete"
+                title="Delete reply"
+                onClick={() => handleDelete(reply.id)}
+              >🗑️</button>
+            )}
+          </div>
+        )}
+
+      </div>
+    ))}
+  </div>
+
+    <div className="msg-thread-input-wrap">
+
+  <textarea
+    className="msg-thread-input"
+    placeholder="Reply to thread..."
+    value={threadReplyText}
+    onChange={(e) => setThreadReplyText(e.target.value)}
+  />
+
+  <button
+    className="msg-thread-send-btn"
+    onClick={() => {
+
+      if (!threadReplyText.trim()) return;
+
+      socket?.emit('message:send', {
+        channelId,
+        roomName,
+        text: threadReplyText,
+        parentMessageId: selectedThread.id,
+      });
+
+      setThreadReplyText('');
+    }}
+  >
+    Send
+  </button>
+
+</div>
+
+  </div>
+)}
 
         <div ref={bottomRef} />
       </div>

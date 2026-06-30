@@ -12,6 +12,12 @@ const RoomSchema = new mongoose.Schema({
   isPrivate:      { type: Boolean, default: false },   // hidden from members
   isReadOnly:     { type: Boolean, default: false },   // members can't send
   isLocked:       { type: Boolean, default: false },   // nobody can send
+  
+  
+  slowModeSeconds: {
+    type: Number,
+    default: 0
+  },
 
   // Users explicitly allowed in private rooms
   allowedUsers:   [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],

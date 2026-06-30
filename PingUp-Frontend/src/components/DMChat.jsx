@@ -1,54 +1,91 @@
 import { useState, useEffect, useRef, } from 'react';
+import { getApiUrl } from '../api';
+import { useDraftMessage } from '../hooks/useDraftMessage';
+
+// Generate a temporary client-side ID for optimistic message rendering
+function generateClientId() {
+  return `client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Emit a socket event and invoke callback with the server's acknowledgement.
+// Falls back to a "sent" response after a short delay if the server doesn't ack.
+function emitWithRetry(socket, event, data, callback) {
+  let settled = false;
+  const settle = (res) => {
+    if (settled) return;
+    settled = true;
+    callback?.(res);
+  };
+  socket.emit(event, data, (res) => settle(res || {}));
+  // If no ack within 5 s, treat as sent (server may not support acks)
+  setTimeout(() => settle({}), 5000);
+}
 
 export default function DMChat({ currentUser, otherUser, token, socket, onClose }) {
   const [messages, setMessages]       = useState([]);
-  const [text, setText]               = useState('');
+  const { text, setText, clearDraft } = useDraftMessage('dm', otherUser?.id);
   const [typing, setTyping]           = useState(false);
   const [isTyping, setIsTyping]       = useState(false);
   const bottomRef                     = useRef(null);
   const typingTimeout                 = useRef(null);
-  const otherUserId                   = otherUser?.id;
+  const inputRef                      = useRef(null);
+
+  // Auto-focus input when opening DM (removed unnecessary setTimeout)
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [otherUser?.id]);
+
+  const otherUserId = otherUser?.id;
+  const currentUserId = currentUser?.id;
+  const currentUsername = currentUser?.username;
 
   // Load history + join DM room
   useEffect(() => {
-    if (!otherUserId || !token) return;
-    const conversationId = [currentUser.id, otherUserId].sort().join('_');
+    if (!currentUserId || !otherUserId || !token) return;
+    const conversationId = [currentUserId, otherUserId].sort().join('_');
 
-    fetch(`https://pingup-backend-1.onrender.com/api/dm/${otherUserId}`, {
+    fetch(getApiUrl(`/api/dm/${otherUserId}`), {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
       .then(data => setMessages(Array.isArray(data) ? data : []))
-      .catch(() => {});
+      .catch(() => { });
 
     socket.emit('dm:join', { otherUserId });
 
     const onMessage = (msg) => {
       if (msg.conversationId !== conversationId) return;
       setMessages(prev => {
-        if (prev.find(m => m.id === msg.id)) return prev;
+        const existingMsg = prev.find(m => m.id === msg.id || (msg.clientId && m.id === msg.clientId));
+        if (existingMsg) {
+          return prev.map(m => m.id === existingMsg.id ? { ...m, ...msg, id: msg.id, status: 'sent' } : m);
+        }
         return [...prev, msg];
       });
     };
     const onTyping = ({ username, typing }) => {
-      if (username !== currentUser.username) setIsTyping(typing);
+      if (username !== currentUsername) setIsTyping(typing);
     };
     const onRead = ({ conversationId: readConversationId }) => {
       if (readConversationId !== conversationId) return;
       setMessages(prev => prev.map(m => ({ ...m, read: true })));
     };
 
+    const onDisconnect = () => setIsTyping(false);
+
     socket.on('dm:message', onMessage);
-    socket.on('dm:typing',  onTyping);
-    socket.on('dm:read',    onRead);
+    socket.on('dm:typing', onTyping);
+    socket.on('dm:read', onRead);
+    socket.on('disconnect', onDisconnect);
 
     return () => {
       socket.off('dm:message', onMessage);
-      socket.off('dm:typing',  onTyping);
-      socket.off('dm:read',    onRead);
+      socket.off('dm:typing', onTyping);
+      socket.off('dm:read', onRead);
+      socket.off('disconnect', onDisconnect);
       socket.emit('dm:leave', { otherUserId });
     };
-  }, [currentUser.id, currentUser.username, otherUserId, socket, token]);
+  }, [currentUserId, otherUserId, token, socket, currentUsername]);
 
   // Auto scroll
   useEffect(() => {
@@ -59,8 +96,39 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
     e.preventDefault();
     const trimmed = text.trim();
     if (!trimmed) return;
-    socket.emit('dm:send', { toUserId: otherUser.id, text: trimmed });
-    setText('');
+    const clientId = generateClientId();
+
+    const optMsg = {
+      id: clientId, // temporary ID
+      senderId: currentUser.id,
+      senderUsername: currentUser.username,
+      senderRole: currentUser.role,
+      text: trimmed,
+      timestamp: Date.now(),
+      status: 'sending' // <-- New status field
+    };
+
+    setMessages(prev => [...prev, optMsg]);
+    clearDraft();
+    
+    // Maintain focus after sending (removed unnecessary setTimeout)
+    inputRef.current?.focus();
+
+    emitWithRetry(socket, 'dm:send', {
+      toUserId: otherUser.id,
+      text: trimmed,
+      clientId // ← Send to backend for idempotency
+    }, (res) => {
+      if (res.error) {
+        setMessages(prev => prev.map(m =>
+          m.id == clientId ? { ...m, status: 'failed' } : m
+        ))
+      } else {
+        setMessages(prev => prev.map(m =>
+          m.id === clientId ? { ...m, id: res.id || m.id, status: 'sent' } : m
+        ));
+      }
+    });
     clearTimeout(typingTimeout.current);
     socket.emit('dm:typing:stop', { toUserId: otherUser.id });
     setTyping(false);
@@ -139,8 +207,12 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
                 <div className="dm-msg-meta">
                   <span className="dm-msg-time">{formatTime(msg.timestamp)}</span>
                   {isMe && (
-                    <span className="dm-msg-read" title={msg.read ? 'Read' : 'Delivered'}>
-                      {msg.read ? '✓✓' : '✓'}
+                    <span className="dm-msg-read" title={msg.status || (msg.read ? 'Read' : 'Delivered')}>
+                      {msg.status === 'sending' && '🕒'}
+                      {msg.status === 'failed' && '⚠️ Failed'}
+                      {msg.status === 'sent' && (msg.read ? '✓✓' : '✓')}
+                      {/* Fallback for old messages without status */}
+                      {!msg.status && (msg.read ? '✓✓' : '✓')}
                     </span>
                   )}
                 </div>
@@ -171,10 +243,10 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
       {/* Input */}
       <form className="dm-chat-input-row" onSubmit={handleSend}>
         <input
+          ref={inputRef}
           value={text}
           onChange={handleChange}
           placeholder={`Message ${otherUser.username}…`}
-          autoFocus
         />
         <button type="submit" disabled={!text.trim()}>➤</button>
       </form>

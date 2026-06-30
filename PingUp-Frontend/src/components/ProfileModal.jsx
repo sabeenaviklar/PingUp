@@ -1,18 +1,19 @@
 import { useState } from 'react';
+import { getApiUrl } from '../api';
 
-export default function ProfileModal({ user, onClose }) {
-  if (!user) return null;
-
+export default function ProfileModal({ user, onClose, setCurrentUser }) {
   const [tab, setTab] = useState('security');
   const [editing, setEditing] = useState(null); // 'displayName' | 'username' | 'email' | 'phone'
   const [fields, setFields] = useState({
-    displayName: user.username,
-    username:    user.username,
-    email:       'user@gmail.com',
-    phone:       '1234565862',
+    displayName: user?.displayName || user?.username || '',
+    username:    user?.username || '',
+    email:       user?.email || '',
+    phone:       user?.phone || '',
   });
   const [tempVal, setTempVal] = useState('');
   const [revealed, setRevealed] = useState({ email: false, phone: false });
+
+  if (!user) return null;
 
   const bannerGradient = {
     admin:     'linear-gradient(135deg, #3a1f1f 0%, #1a0a0a 100%)',
@@ -25,19 +26,47 @@ export default function ProfileModal({ user, onClose }) {
     setEditing(field);
   }
 
-  function saveEdit() {
+  async function saveEdit(){
     if (tempVal.trim()) {
-      setFields(f => ({ ...f, [editing]: tempVal.trim() }));
+      const patch = { [editing]: tempVal.trim() };
+      try{
+        const token = localStorage.getItem('token');
+        const res = await fetch(getApiUrl('/api/profile'), { method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(patch),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          console.error(data.error);
+          return;
+        }
+        setFields({
+          displayName: data.user.displayName || '',
+          username: data.user.username || '',
+          email: data.user.email || '',
+          phone: data.user.phone || '',
+        });  
+        setCurrentUser(data.user);
+        localStorage.setItem('user',JSON.stringify(data.user));
+    } catch (err) {
+      console.error(err);
+    }finally{
+      setEditing(null);
     }
-    setEditing(null);
+   }
   }
 
   function maskEmail(email) {
+    if (!email || !email.includes('@')) return email;
     const [local, domain] = email.split('@');
     return '*'.repeat(Math.max(local.length, 8)) + '@' + domain;
   }
 
   function maskPhone(phone) {
+    if (!phone || phone === 'No phone provided') return phone;
     return '*'.repeat(Math.max(phone.length - 4, 6)) + phone.slice(-4);
   }
 

@@ -1,0 +1,91 @@
+.notfound-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: radial-gradient(circle at top, #1e2f26, #1a2a22);
+  color: #e8f0ec;
+  text-align: center;
+  padding: 20px;
+}
+
+/* 404 number */
+.notfound-code {
+  font-size: 6rem;
+  font-weight: bold;
+  color: #4a9e8e;
+  text-shadow: 0 0 25px rgba(74, 158, 142, 0.4);
+  animation: pulse404 2s ease-in-out infinite;
+}
+
+@keyframes pulse404 {
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.05);
+    opacity: 0.85;
+  }
+}
+
+.notfound-title {
+  font-size: 2rem;
+  margin: 10px 0;
+  color: #e8f0ec;
+}
+
+.notfound-text {
+  color: #7a9e8a;
+  margin-bottom: 20px;
+}
+
+.notfound-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+/* Buttons */
+.notfound-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  border: none;
+  font-size: 1rem;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.notfound-btn:hover {
+  transform: translateY(-2px);
+  opacity: 1;
+}
+
+.notfound-btn-primary {
+  background: #4a9e8e;
+  color: #1a2a22;
+  font-weight: 500;
+}
+
+.notfound-btn-primary:hover {
+  background: #5ab5a4;
+}
+
+.notfound-btn-secondary {
+  background: #243322;
+  color: #e8f0ec;
+  border: 1px solid #7a9e8a33;
+}
+
+.notfound-btn-secondary:hover {
+  background: #1e2f26;
+}

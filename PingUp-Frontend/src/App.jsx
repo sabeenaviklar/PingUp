@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { getSocket, disconnectSocket } from './socket';
 import Login        from './components/Login';
 import Register     from './components/Register';
@@ -12,12 +13,20 @@ import DMChat       from './components/DMChat';
 import DMList       from './components/DMList';
 import AdminPanel   from './components/AdminPanel';
 import VoiceChannel from './components/VoiceChannel';
+import NotFound     from './pages/NotFound';
 
 // Channel names that render as the music/voice player instead of a text chat
 const VOICE_CHANNELS = ['music-lounge'];
 
 export default function App() {
-  const [authPage,     setAuthPage]     = useState('login');
+  const location = useLocation();
+  const validPaths = ['/', '/index.html', '/login', '/register'];
+  const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
+  const isNotFound = !validPaths.includes(normalizedPath);
+
+  const [authPage,     setAuthPage]     = useState(() => {
+    return normalizedPath === '/register' ? 'register' : 'login';
+  });
   const [currentUser,  setCurrentUser]  = useState(() => {
     const u = localStorage.getItem('user');
     return u ? JSON.parse(u) : null;
@@ -29,6 +38,8 @@ export default function App() {
   const [activeChannel, setActiveChannel] = useState(null);
   const [roomSettings,  setRoomSettings]  = useState(null);
   const [messages,      setMessages]      = useState([]);
+  const [selectedThread, setSelectedThread] = useState(null);
+const [threadReplies, setThreadReplies] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [commandResps,  setCommandResps]  = useState([]);
   const [typingUsers,   setTypingUsers]   = useState([]);
@@ -40,13 +51,38 @@ export default function App() {
   const [showAdmin,     setShowAdmin]     = useState(false);
   const [activeDM,      setActiveDM]      = useState(null);
   const [dmNotifs,      setDmNotifs]      = useState([]);
+  const [sessionMsg, setSessionMsg] = useState(null);
   const [dmToast,       setDmToast]       = useState(null);
+  const dmToastTimeoutRef = useRef(null);
+  const [allowUserChannelCreation, setAllowUserChannelCreation] = useState(false);
 
+  const [socketInstance, setSocketInstance] = useState(null);
   const socketRef = useRef(null);
+  const activeChannelRef = useRef(activeChannel);
+
+  useEffect(() => {
+    activeChannelRef.current = activeChannel;
+  }, [activeChannel]);
 
   const isVoiceChannel = activeChannel && VOICE_CHANNELS.includes(activeChannel.name);
   const isOwner        = currentUser?.role === 'owner';
-  const isMod          = ['owner', 'moderator'].includes(currentUser?.role);
+
+  const handleLogout = useCallback(() => {
+    disconnectSocket();
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setCurrentUser(null);
+    setToken('');
+    setActiveChannel(null);
+    setActiveDM(null);
+    setMessages([]);
+    setOnlineUsers([]);
+    setShowProfile(false);
+    setShowFriends(false);
+    setShowAdmin(false);
+    setAllowUserChannelCreation(false);
+    setAuthPage('login');
+  }, []);
 
   // ── Socket setup ───────────────────────────────────────────────
   useEffect(() => {
@@ -55,8 +91,16 @@ export default function App() {
     socketRef.current = socket;
     socket.connect();
 
+    const timer = setTimeout(() => {
+      setSocketInstance(socket);
+    }, 0);
+
     socket.on('users:update', setOnlineUsers);
     socket.on('structure:update', setCategories);
+
+    socket.on('settings:update', ({ allowUserChannelCreation }) => {
+        setAllowUserChannelCreation(allowUserChannelCreation);
+    });
 
     socket.on('role:updated', ({ role }) => {
       setCurrentUser(u => {
@@ -98,19 +142,69 @@ export default function App() {
       setCommandResps(prev => [...prev, res])
     );
 
-    socket.on('message:new', msg =>
-      setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg])
+    socket.on('message:new', (msg) => {
+
+  if (msg.parentMessageId) {
+    setThreadReplies(prev =>
+      prev.find(m => m.id === msg.id)
+        ? prev
+        : [...prev, msg]
     );
-    socket.on('message:deleted', ({ id }) =>
+
+    setMessages(prev =>
+      prev.map(m =>
+        m.id === msg.parentMessageId
+          ? {
+              ...m,
+              replyCount: (m.replyCount || 0) + 1
+            }
+          : m
+      )
+    );
+
+    return;
+  }
+
+ if (!msg.parentMessageId) {
+  setMessages(prev =>
+    prev.find(m => m.id === msg.id)
+      ? prev
+      : [...prev, msg]
+  );
+}
+});
+
+    socket.on('thread:history', ({ replies }) => {
+  setThreadReplies(replies || []);
+});
+
+    socket.on('message:deleted', ({ id }) => {
       setMessages(prev =>
         prev.map(m => m.id === id ? { ...m, deleted: true, text: '[message deleted]' } : m)
-      )
-    );
-    socket.on('message:edited', ({ id, text, editedAt, hasEditHistory }) =>
+      );
+      setThreadReplies(prev =>
+        prev.map(m => m.id === id ? { ...m, deleted: true, text: '[message deleted]' } : m)
+      );
+    });
+    socket.on('message:edited', ({ id, text, editedAt, hasEditHistory }) => {
       setMessages(prev =>
         prev.map(m => m.id === id ? { ...m, text, editedAt, hasEditHistory } : m)
-      )
-    );
+      );
+      setThreadReplies(prev =>
+        prev.map(m => m.id === id ? { ...m, text, editedAt, hasEditHistory } : m)
+      );
+    });
+
+    socket.on('message:reaction:update', ({ messageId, reactions }) => {
+  setMessages(prev =>
+    prev.map(m =>
+      String(m.id) === String(messageId)
+        ? { ...m, reactions }
+        : m
+    )
+  );
+});
+
     socket.on('message:pinned', ({ id, pinnedBy }) => {
       setMessages(prev => prev.map(m => m.id === id ? { ...m, pinned: true } : m));
       setNotifications(prev => [...prev, `📌 Message pinned by ${pinnedBy}`]);
@@ -130,12 +224,27 @@ export default function App() {
     socket.on('dm:notification', notif => {
       setDmNotifs(prev => [...prev, notif]);
       setDmToast(notif);
-      setTimeout(() => setDmToast(null), 4000);
+      if (dmToastTimeoutRef.current) {
+        clearTimeout(dmToastTimeoutRef.current);
+      }
+      dmToastTimeoutRef.current = setTimeout(() => {
+        setDmToast(null);
+      }, 4000);
     });
 
     socket.on('kicked', ({ by }) => {
       alert(`You were kicked by ${by}.`);
       handleLogout();
+    });
+    socket.on('channel:kicked', ({ channelId, reason }) => {
+      if (activeChannelRef.current?.id === channelId) {
+        setActiveChannel(null);
+        setMessages([]);
+        setRoomSettings(null);
+        setNotifications([]);
+        setCommandResps([]);
+        alert(reason || 'This channel is now private.');
+      }
     });
     socket.on('error:permission', msg =>
       setCommandResps(prev => [...prev, { type: 'error', text: `⛔ ${msg}` }])
@@ -145,32 +254,26 @@ export default function App() {
     );
     socket.on('error:general', msg => console.error('[socket]', msg));
 
-    return () => socket.removeAllListeners();
-  }, [token, currentUser?.id]);
+    return () => {
+      clearTimeout(timer);
+    if (dmToastTimeoutRef.current) {
+      clearTimeout(dmToastTimeoutRef.current);
+    }
+    socket.removeAllListeners();
+    setSocketInstance(null);
+    socketRef.current = null;
+  };
+}, [token, currentUser, handleLogout]);
 
   // ── Auth ───────────────────────────────────────────────────────
   const handleLogin = (user, tok) => {
     setCurrentUser(user);
     setToken(tok);
+    setSessionMsg(null); 
     localStorage.setItem('token', tok);
     localStorage.setItem('user',  JSON.stringify(user));
   };
 
-  const handleLogout = useCallback(() => {
-    disconnectSocket();
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setCurrentUser(null);
-    setToken('');
-    setActiveChannel(null);
-    setActiveDM(null);
-    setMessages([]);
-    setOnlineUsers([]);
-    setShowProfile(false);
-    setShowFriends(false);
-    setShowAdmin(false);
-    setAuthPage('login');
-  }, []);
 
   // ── Channel select ─────────────────────────────────────────────
   const handleChannelSelect = useCallback((ch) => {
@@ -188,12 +291,13 @@ export default function App() {
   }, []);
 
   // ── Messaging ──────────────────────────────────────────────────
-  const handleSend = useCallback((text) => {
+  const handleSend = useCallback((text, imageUrl) => {
     if (!activeChannel) return;
     socketRef.current?.emit('message:send', {
       channelId: activeChannel.id,
       roomName:  activeChannel.name,
       text,
+      imageUrl,
     });
   }, [activeChannel]);
 
@@ -201,6 +305,23 @@ export default function App() {
     if (!activeChannel) return;
     socketRef.current?.emit('typing:start', { channelId: activeChannel.id });
   }, [activeChannel]);
+
+  const handleOpenThread = useCallback((message) => {
+
+  if (!message) {
+    setSelectedThread(null);
+    setThreadReplies([]);
+    return;
+  }
+
+  setSelectedThread(message);
+  setThreadReplies([]);
+
+  socketRef.current?.emit('thread:get', {
+    parentMessageId: message.id,
+  });
+
+}, []);
 
   const handleTypingStop = useCallback(() => {
     if (!activeChannel) return;
@@ -217,12 +338,33 @@ export default function App() {
     setDmNotifs(prev => prev.filter(n => n.fromId !== user.id));
   }
 
+  // ── 404 Not Found fallback ─────────────────────────────────────
+  if (isNotFound) {
+    return <NotFound />;
+  }
+
   // ── Not logged in ──────────────────────────────────────────────
   if (!currentUser) {
-    if (authPage === 'register')
-      return <Register onLogin={handleLogin} onSwitch={() => setAuthPage('login')} />;
-    return <Login onLogin={handleLogin} onSwitch={() => setAuthPage('register')} />;
-  }
+  return (
+    <>
+      {sessionMsg && (
+        <div style={{
+          background: '#f87171',
+          color: '#fff',
+          padding: '12px 20px',
+          textAlign: 'center',
+          fontWeight: 500,
+        }}>
+          {sessionMsg}
+        </div>
+      )}
+      {authPage === 'login'
+        ? <Login onLogin={handleLogin} onSwitch={() => setAuthPage('register')} />
+        : <Register onRegister={handleLogin} onSwitch={() => setAuthPage('login')} />
+      }
+    </>
+  );
+}
 
   // ── Render helpers ─────────────────────────────────────────────
   function renderChatArea() {
@@ -233,12 +375,13 @@ export default function App() {
         <div className="chat-admin-embed">
           <AdminPanel
             currentUser={currentUser}
-            socket={socketRef.current}
+            socket={socketInstance}
             categories={categories}
             onlineUsers={onlineUsers}
             token={token}
             onClose={() => setShowAdmin(false)}
             embedded
+            allowUserChannelCreation={allowUserChannelCreation}
           />
         </div>
       );
@@ -254,7 +397,7 @@ export default function App() {
             online: !!onlineUsers.find(u => u.id === activeDM.id),
           }}
           token={token}
-          socket={socketRef.current}
+          socket={socketInstance}
           onClose={() => setActiveDM(null)}
         />
       );
@@ -271,7 +414,7 @@ export default function App() {
         <VoiceChannel
           channel={activeChannel}
           currentUser={currentUser}
-          socket={socketRef.current}
+          socket={socketInstance}
           onlineUsers={onlineUsers}
           onLeave={() => setActiveChannel(null)}
         />
@@ -321,6 +464,22 @@ export default function App() {
                   title="Toggle private"
                   onClick={() => socketRef.current?.emit('channel:togglePrivate', { channelId: activeChannel.id })}
                 >👁️</button>
+                <select
+  className="hdr-slowmode-select"
+  value={roomSettings?.slowModeSeconds || 0}
+  onChange={(e) =>
+    socketRef.current?.emit('channel:setSlowMode', {
+      channelId: activeChannel.id,
+      seconds: Number(e.target.value),
+    })
+  }
+>
+  <option value={0}>Off</option>
+  <option value={5}>5s</option>
+  <option value={10}>10s</option>
+  <option value={30}>30s</option>
+  <option value={60}>60s</option>
+</select>
                 <button
                   className="hdr-admin-btn hdr-btn-danger"
                   title="Delete channel"
@@ -340,10 +499,13 @@ export default function App() {
             commandResponses={commandResps}
             typingUsers={typingUsers}
             currentUser={currentUser}
-            socket={socketRef.current}
+            socket={socketInstance}
             channelId={activeChannel.id}
             roomName={activeChannel.name}
             roomSettings={roomSettings}
+            selectedThread={selectedThread}
+            threadReplies={threadReplies}
+            onOpenThread={handleOpenThread}
           />
           <MessageInput
             onSend={handleSend}
@@ -352,6 +514,8 @@ export default function App() {
             roomName={activeChannel.name}
             roomSettings={roomSettings}
             currentUser={currentUser}
+            channelId={activeChannel.id}
+            token={token}
           />
         </>
       );
@@ -387,10 +551,11 @@ export default function App() {
         onlineUsers={onlineUsers}
         activeChannel={activeChannel}
         categories={categories}
-        socket={socketRef.current}
+        socket={socketInstance}
         onChannelSelect={handleChannelSelect}
         onLogout={handleLogout}
         onOpenProfile={() => setShowProfile(true)}
+        allowUserChannelCreation={allowUserChannelCreation}
         onShowFriends={() => {
           setShowFriends(true);
           setActiveChannel(null);
@@ -428,7 +593,7 @@ export default function App() {
           currentUser={currentUser}
           onlineUsers={onlineUsers}
           token={token}
-          socket={socketRef.current}
+          socket={socketInstance}
           onUserClick={(user) => {
             if (user.id === currentUser.id) return;
             openDM(user);
@@ -442,6 +607,7 @@ export default function App() {
           user={currentUser}
           onClose={() => setShowProfile(false)}
           onLogout={handleLogout}
+          setCurrentUser={setCurrentUser}
         />
       )}
 

@@ -12,6 +12,23 @@
 
 ---
 
+## Table of Contents
+
+- [🔗 Repositories](#-repositories)
+- [💡 What is PingUp?](#-what-is-pingup)
+- [✨ Feature Overview](#-feature-overview)
+- [🏗️ Tech Stack](#%EF%B8%8F-tech-stack)
+- [🗂️ Project Structure](#%EF%B8%8F-project-structure)
+- [⚡ Setup & Installation](#-setup--installation)
+- [🔌 API Reference](#-api-reference)
+- [🔐 Security](#-security)
+- [🎨 Design System](#-design-system)
+- [👨‍💻 Built By](#%E2%80%8D-built-by)
+- [📄 License](#-license)
+- [Acknowledgements](#acknowledgements)
+
+---
+
 ## 🔗 Repositories
 
 | Part        | Repository                                                                                   |
@@ -187,6 +204,7 @@ Make sure you have the following installed:
 - **Node.js** v18 or higher — [download here](https://nodejs.org)
 - **npm** v9+ (comes with Node.js)
 - **MongoDB Atlas** account (free tier works) — [sign up here](https://mongodb.com/atlas)
+- **Redis Server** (required for background queues, presence, and session syncing)
 - **Git** — [download here](https://git-scm.com)
 
 ---
@@ -242,6 +260,22 @@ Then set your real values in `PingUp-Backend/.env`:
 - `MONGO_URI`: your MongoDB Atlas connection string
 - `JWT_SECRET`: a strong, unique secret (rotate if it was ever exposed)
 - `PORT`: server port (e.g. `3001`)
+- `REDIS_URL`: your Redis connection string (defaults to `redis://localhost:6379` if left empty)
+
+#### Redis Setup Instructions
+PingUp relies on a running Redis instance. You can set it up in one of the following ways:
+
+* **Docker (Recommended):**
+  If you have Docker installed, spin up a container with:
+  ```bash
+  docker run -d -p 6379:6379 --name pingup-redis redis
+  ```
+* **Local Installation:**
+  - **macOS:** Install via Homebrew: `brew install redis` -> Start with: `brew services start redis`
+  - **Linux/WSL:** Install via APT: `sudo apt install redis-server` -> Start with: `sudo service redis-server start`
+  - **Windows (Native):** Download the latest release from [github.com/tporadowski/redis](https://github.com/tporadowski/redis/releases) or use WSL.
+* **Free Hosted Cloud Redis:**
+  - Create a free database on [Upstash](https://upstash.com/) or [RedisLabs](https://redislabs.com/) and paste the provided endpoint URI into the `REDIS_URL` environment variable.
 
 > ⚠️ Never commit `.env` to GitHub. This repo includes `PingUp-Backend/.env.example` with placeholder values.
 
@@ -422,6 +456,8 @@ The Music Lounge overrides these with **per-track dynamic gradients** based on t
 | \*\*Sabeena
 
 ---
+
+NOTE: For admin login, the username : josh and password : 1234
 
 ## 📄 License
 

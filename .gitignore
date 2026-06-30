@@ -1,6 +1,9 @@
 # dependencies
 node_modules/
 
+
+seed.js
+
 # environment files
 .env
 .env.local
@@ -24,3 +27,4 @@ coverage/
 .DS_Store
 .vscode/
 .idea/
+uploads/

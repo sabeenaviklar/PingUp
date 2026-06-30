@@ -1,23 +1,45 @@
 import { useState, useEffect } from 'react';
+import { getApiUrl } from '../api';
 
-export default function AdminPanel({ currentUser, socket, categories, onlineUsers, token, onClose }) {
+export default function AdminPanel({ currentUser, socket, categories, token, onClose, allowUserChannelCreation }) {
   const [tab,         setTab]         = useState('channels'); // 'channels' | 'users' | 'roles'
   const [allUsers,    setAllUsers]    = useState([]);
   const [loadingUsers,setLoadingUsers]= useState(false);
   const [notification,setNotification]= useState('');
+  const [settings,    setSettings]    = useState({
+    allowUserChannelCreation: allowUserChannelCreation ?? true,
+  });
 
-  const isOwner = currentUser?.role === 'owner';
 
   // Fetch all users for user management
   useEffect(() => {
     if (tab !== 'users' && tab !== 'roles') return;
-    setLoadingUsers(true);
-    fetch('https://pingup-backend-1.onrender.com/api/users', {
+    
+    let isMounted = true;
+    const timer = setTimeout(() => {
+      if (isMounted) setLoadingUsers(true);
+    }, 0);
+
+    fetch(getApiUrl('/api/users'), {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then(data => { setAllUsers(data); setLoadingUsers(false); })
-      .catch(() => setLoadingUsers(false));
+      .then(data => {
+        if (isMounted) {
+          setAllUsers(data);
+          setLoadingUsers(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setLoadingUsers(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
   }, [tab, token]);
 
   function notify(msg) {
@@ -68,7 +90,6 @@ export default function AdminPanel({ currentUser, socket, categories, onlineUser
     notify(`Banned ${username}`);
   }
 
-  const allChannels = (categories || []).flatMap(c => c.channels);
 
   return (
     <div className="admin-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -91,7 +112,7 @@ export default function AdminPanel({ currentUser, socket, categories, onlineUser
 
         {/* Tabs */}
         <div className="admin-tabs">
-          {['channels', 'users', 'roles'].map(t => (
+          {['channels', 'users', 'roles','settings'].map(t => (
             <button
               key={t}
               className={`admin-tab ${tab === t ? 'active' : ''}`}
@@ -100,6 +121,7 @@ export default function AdminPanel({ currentUser, socket, categories, onlineUser
               {t === 'channels' && '🏠 Channels'}
               {t === 'users'    && '👥 Users'}
               {t === 'roles'    && '🔰 Roles'}
+              {t === 'settings' && '⚙️ Settings'}
             </button>
           ))}
         </div>
@@ -324,6 +346,40 @@ export default function AdminPanel({ currentUser, socket, categories, onlineUser
             </div>
           )}
 
+          {/* ── Settings tab ──────────────────────────────────────── */}
+          {tab === 'settings' && (
+            <div className="admin-section">
+              <p className="admin-hint">
+                Control server-wide permissions and feature toggles.
+              </p>
+              <div className="admin-setting-row">
+                <div className="admin-setting-info">
+                  <span className="admin-setting-label">
+                    Allow members/moderators to create channels
+                  </span>
+                  <span className="admin-setting-desc">
+                    When enabled, non-admin users can create new 
+                    channels in any category.
+                  </span>
+                </div>
+                <button
+                  className={`admin-toggle ${settings.allowUserChannelCreation ? 'on' : 'off'}`}
+                  onClick={() => {
+                    const newValue = !settings.allowUserChannelCreation;
+                    setSettings(prev => ({ ...prev, allowUserChannelCreation: newValue }));
+                    socket?.emit('settings:update', {
+                      key: 'allowUserChannelCreation',
+                      value: newValue,
+                    });
+                    notify(`Channel creation ${newValue ? 'enabled' : 'disabled'} for all users`);
+                  }}
+                >
+                  {settings.allowUserChannelCreation ? '✅ ON' : '❌ OFF'}
+                </button>
+              </div>
+            </div>
+          )}
+        
         </div>
       </div>
     </div>

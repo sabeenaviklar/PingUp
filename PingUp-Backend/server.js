@@ -527,6 +527,38 @@ const filteredRooms = rooms.filter(room => {
 res.json(filteredRooms.map(r => roomToChannel(r)));
 });
 
+// Helper to escape regex special characters
+function escapeRegex(string) {
+    return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+}
+
+// ─── Search Users ──────────────────────────────────────────────────
+// Non-obvious decisions:
+// 1. Escaping query input to prevent ReDoS (Regular Expression Denial of Service).
+// 2. Querying both username and displayName, allowing users to find aliases.
+// 3. Excluding the searching user themselves and banned accounts to ensure safe UX.
+app.get('/api/users/search', requireAuth, async (req, res) => {
+    try {
+        const q = typeof req.query.q === 'string' ? req.query.q : '';
+        if (!q.trim()) return res.json([]);
+
+        const safeQuery = escapeRegex(q.trim());
+        const matches = await User.find({
+            $or: [
+                { username: { $regex: safeQuery, $options: 'i' } },
+                { displayName: { $regex: safeQuery, $options: 'i' } }
+            ],
+            _id: { $ne: req.user.id },
+            banned: { $ne: true }
+        }).limit(10);
+
+        res.json(matches.map(u => u.toSafeObject()));
+    } catch (err) {
+        console.error('User search error:', err);
+        res.status(500).json({ error: 'Server error during user search.' });
+    }
+});
+
 // ─── Get Users ────────────────────────────────────────────────────
 app.get('/api/users', async (req, res) => {
     const decoded = authHeader(req, res);
@@ -1697,6 +1729,20 @@ io.on('connection', async (socket) => {
             }
 
             io.to(`dm:${convId}`).emit('dm:message', payload);
+
+            // Notify the recipient if they are online but not actively in the DM room
+            const recipientSockets = [...io.sockets.sockets.values()].filter(
+                s => s.user?.id === toUserId
+            );
+            recipientSockets.forEach(s => {
+                if (!s.rooms.has(`dm:${convId}`)) {
+                    s.emit('dm:notification', {
+                        fromId: socket.user.id,
+                        from: socket.user.username,
+                        preview: text,
+                    });
+                }
+            });
 
             if (typeof callback === 'function') {
                 callback({ status: 'success', id: msg._id.toString() });

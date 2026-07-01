@@ -36,11 +36,13 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
   }, [otherUser?.id]);
 
   const otherUserId = otherUser?.id;
+  const currentUserId = currentUser?.id;
   const currentUsername = currentUser?.username;
 
   // Load history + join DM room
   useEffect(() => {
-    if (!otherUserId || !token) return;
+    if (!currentUserId || !otherUserId || !token) return;
+    const conversationId = [currentUserId, otherUserId].sort().join('_');
 
     fetch(getApiUrl(`/api/dm/${otherUserId}`), {
       headers: { Authorization: `Bearer ${token}` },
@@ -52,6 +54,7 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
     socket.emit('dm:join', { otherUserId });
 
     const onMessage = (msg) => {
+      if (msg.conversationId !== conversationId) return;
       setMessages(prev => {
         const existingMsg = prev.find(m => m.id === msg.id || (msg.clientId && m.id === msg.clientId));
         if (existingMsg) {
@@ -63,7 +66,8 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
     const onTyping = ({ username, typing }) => {
       if (username !== currentUsername) setIsTyping(typing);
     };
-    const onRead = () => {
+    const onRead = ({ conversationId: readConversationId }) => {
+      if (readConversationId !== conversationId) return;
       setMessages(prev => prev.map(m => ({ ...m, read: true })));
     };
 
@@ -79,8 +83,9 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
       socket.off('dm:typing', onTyping);
       socket.off('dm:read', onRead);
       socket.off('disconnect', onDisconnect);
+      socket.emit('dm:leave', { otherUserId });
     };
-  }, [otherUserId, token, socket, currentUsername]);
+  }, [currentUserId, otherUserId, token, socket, currentUsername]);
 
   // Auto scroll
   useEffect(() => {

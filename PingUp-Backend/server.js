@@ -1037,6 +1037,7 @@ io.on('connection', async (socket) => {
             if (!allowed) return socket.emit('error:permission', 'This channel is private.');
         }
         ;[...socket.rooms].forEach(r => { if (r !== socket.id) socket.leave(r); });
+        socket.currentDM = null;
         socket.join(roomName);
         socket.currentRoom = roomName;
         const history = await Message.find({ roomName, deleted: false })
@@ -1075,6 +1076,7 @@ io.on('connection', async (socket) => {
             if (!allowed) return socket.emit('error:permission', 'This channel is private.');
         }
         ;[...socket.rooms].forEach(r => { if (r !== socket.id) socket.leave(r); });
+        socket.currentDM = null;
         socket.join(channelId);
         socket.currentRoom = room.name;
         socket.currentChannelId = channelId;
@@ -1634,6 +1636,9 @@ io.on('connection', async (socket) => {
     // ── DMs ────────────────────────────────────────────────────────
     socket.on('dm:join', safeSocketHandler(socket, 'dm:join', async ({ otherUserId }) => {
         const convId = [socket.user.id, otherUserId].sort().join('_');
+        if (socket.currentDM && socket.currentDM !== convId) {
+            socket.leave(`dm:${socket.currentDM}`);
+        }
         socket.join(`dm:${convId}`);
         socket.currentDM = convId;
         await DirectMessage.updateMany(
@@ -1643,6 +1648,12 @@ io.on('connection', async (socket) => {
         const otherSocket = [...io.sockets.sockets.values()].find(s => s.user?.id === otherUserId);
         if (otherSocket) otherSocket.emit('dm:read', { conversationId: convId });
     }, 'Failed to open direct message.'));
+
+    socket.on('dm:leave', ({ otherUserId }) => {
+        const convId = [socket.user.id, otherUserId].sort().join('_');
+        socket.leave(`dm:${convId}`);
+        if (socket.currentDM === convId) socket.currentDM = null;
+    });
 
     socket.on('dm:send', safeSocketHandler(socket, 'dm:send', async ({ toUserId, text, clientId }, callback) => {
         try {
@@ -1687,16 +1698,31 @@ io.on('connection', async (socket) => {
 
             const payload = {
                 id: msg._id.toString(),
+                conversationId: convId,
                 senderId: socket.user.id,
                 senderUsername: socket.user.username,
                 senderRole: socket.user.role,
                 text,
                 timestamp: msg.createdAt,
-                read: false,
+                read: msg.read || false,
                 clientId
             }
 
+            const receiverViewingChat = [...io.sockets.sockets.values()].some(
+                s => String(s.user?.id) === String(toUserId) && s.currentDM === convId
+            );
+            if (receiverViewingChat && !msg.read) {
+                msg.read = true;
+                await msg.save();
+                payload.read = true;
+            }
+
             io.to(`dm:${convId}`).emit('dm:message', payload);
+            if (receiverViewingChat) {
+                io.to(`dm:${convId}`).emit('dm:read', {
+                    conversationId: convId,
+                });
+            }
 
             if (typeof callback === 'function') {
                 callback({ status: 'success', id: msg._id.toString() });

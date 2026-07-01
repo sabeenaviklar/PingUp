@@ -1,3 +1,5 @@
+import MarkdownMessage from './MarkdownMessage';
+
 export default function PinnedSidebar({ showPinnedSidebar, setShowPinnedSidebar, pinnedMessages, isMod, handlePin }) {
   if (!showPinnedSidebar) return null;
 
@@ -58,11 +60,7 @@ export default function PinnedSidebar({ showPinnedSidebar, setShowPinnedSidebar,
               <span className="msg-pinned-time">
                 {new Date(msg.timestamp).toLocaleString()}
               </span>
-              <p>
-                {(msg.text || "").length > 100
-                  ? (msg.text || "").slice(0, 100) + "..."
-                  : msg.text}
-              </p>
+              <MarkdownMessage content={msg.text || ""} truncate={true} />
               {isMod && (
                 <button
                   className="msg-pinned-unpin"

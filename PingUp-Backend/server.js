@@ -9,6 +9,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 // Image upload setup
 const uploadDir = path.join(__dirname, '..', 'uploads');
@@ -16,7 +17,12 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname)),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '');
+    const randomSuffix = crypto.randomBytes(4).toString('hex');
+    cb(null, `${Date.now()}-${randomSuffix}-${base}${ext}`);
+  },
 });
 
 /**
@@ -25,12 +31,18 @@ const storage = multer.diskStorage({
  * Non-obvious decisions:
  * 1. Double validation: checks both content-type (mimetype) and file extension to mitigate
  *    malicious extension renaming bypasses (e.g. uploading .html disguised as .png).
- * 2. Whitelist approach: restricts uploads strictly to safe image assets (JPEG, PNG, GIF, WEBP)
+ * 2. Whitelist approach: restricts uploads strictly to safe image assets and documents
  *    to prevent Cross-Site Scripting (XSS) via HTML uploads or Remote Code Execution (RCE) in public static directories.
  */
 const fileFilter = (req, file, cb) => {
-  const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-  const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+  const allowedMimeTypes = [
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+    'application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json'
+  ];
+  const allowedExtensions = [
+    '.jpg', '.jpeg', '.png', '.gif', '.webp',
+    '.pdf', '.txt', '.md', '.csv', '.json'
+  ];
 
   const isMimeAllowed = allowedMimeTypes.includes(file.mimetype);
   const isExtensionAllowed = allowedExtensions.includes(path.extname(file.originalname).toLowerCase());
@@ -38,7 +50,7 @@ const fileFilter = (req, file, cb) => {
   if (isMimeAllowed && isExtensionAllowed) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WEBP images are allowed.'), false);
+    cb(new Error('Invalid file type. Only Images and safe Documents (PDF, TXT, MD, CSV, JSON) are allowed.'), false);
   }
 };
 
@@ -85,22 +97,56 @@ app.use(
     })
 );
 app.use(express.json());
-// Serve uploaded images
-app.use('/uploads', express.static(uploadDir));
+// Serve uploaded files securely
+app.use('/uploads', (req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'");
+    next();
+}, express.static(uploadDir));
 
 /**
- * Verifies that the file content starts with a valid image header (magic bytes).
- * Supports JPEG, PNG, GIF, and WEBP.
+ * Verifies that the file content starts with a valid image/document header (magic bytes)
+ * or passes heuristic text validation.
  */
-async function checkFileSignature(filePath) {
+async function checkFileSignature(filePath, originalname) {
+  const ext = path.extname(originalname).toLowerCase();
+
   let fileHandle;
   try {
     fileHandle = await fs.promises.open(filePath, 'r');
+    
+    // For text-based files, we read more to check for null bytes
+    const textExtensions = ['.txt', '.md', '.csv', '.json'];
+    if (textExtensions.includes(ext)) {
+      const stat = await fileHandle.stat();
+      const readSize = Math.min(stat.size, 4096);
+      if (readSize === 0) return true; // Empty files are safe text
+      
+      const buffer = Buffer.alloc(readSize);
+      await fileHandle.read(buffer, 0, readSize, 0);
+      
+      if (ext === '.json') {
+          const str = buffer.toString('utf8').trim();
+          if (!str.startsWith('{') && !str.startsWith('[')) return false;
+      }
+
+      for (let i = 0; i < readSize; i++) {
+          if (buffer[i] === 0x00) return false;
+      }
+      return true;
+    }
+
     const buffer = Buffer.alloc(12);
     const { bytesRead } = await fileHandle.read(buffer, 0, 12, 0);
 
     if (bytesRead < 4) {
       return false;
+    }
+
+    // PDF: %PDF (25 50 44 46)
+    if (ext === '.pdf') {
+       if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) return true;
+       return false;
     }
 
     // JPEG: FF D8 FF
@@ -157,14 +203,14 @@ app.post('/api/upload', requireAuth, (req, res, next) => {
     }
 
     // Server-side magic-byte/content signature validation
-    const isValidSignature = await checkFileSignature(req.file.path);
+    const isValidSignature = await checkFileSignature(req.file.path, req.file.originalname);
     if (!isValidSignature) {
       try {
         await fs.promises.unlink(req.file.path);
       } catch (unlinkErr) {
         console.error('Failed to delete invalid file:', unlinkErr);
       }
-      return res.status(400).json({ error: 'Invalid file content. Uploaded file is not a valid image.' });
+      return res.status(400).json({ error: 'Invalid file content. Uploaded file failed security validation.' });
     }
 
     const imageUrl = `/uploads/${req.file.filename}`;

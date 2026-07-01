@@ -1,3 +1,5 @@
+import MarkdownMessage from './MarkdownMessage';
+
 export default function MessageItem({
   msg,
   hoveredMsg,
@@ -88,7 +90,7 @@ export default function MessageItem({
           </div>
         ) : (
           <div className="msg-text">
-            {msg.text}
+            <MarkdownMessage content={msg.text} />
             {msg.imageUrl && (
               <img
                 src={msg.imageUrl}

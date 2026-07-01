@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, } from 'react';
 import { getApiUrl } from '../api';
 import { useDraftMessage } from '../hooks/useDraftMessage';
+import MarkdownMessage from './MarkdownMessage';
 
 // Generate a temporary client-side ID for optimistic message rendering
 function generateClientId() {
@@ -197,7 +198,7 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
                   </span>
                 )}
                 <div className={`dm-msg-bubble ${isMe ? 'bubble-mine' : 'bubble-theirs'}`}>
-                  {msg.text}
+                  <MarkdownMessage content={msg.text} />
                 </div>
                 <div className="dm-msg-meta">
                   <span className="dm-msg-time">{formatTime(msg.timestamp)}</span>
@@ -241,7 +242,7 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
           ref={inputRef}
           value={text}
           onChange={handleChange}
-          placeholder={`Message ${otherUser.username}…`}
+          placeholder={`Message ${otherUser.username} (Markdown supported)...`}
         />
         <button type="submit" disabled={!text.trim()}>➤</button>
       </form>

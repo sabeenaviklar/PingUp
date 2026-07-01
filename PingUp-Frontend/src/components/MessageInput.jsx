@@ -36,7 +36,7 @@ export default function MessageInput({
   const getPlaceholder = () => {
     if (isLocked)   return '🔒 This channel is locked';
     if (isReadOnly) return '🚫 This channel is read-only';
-    return `Message #${roomName}`;
+    return `Message #${roomName} (Markdown supported)`;
   };
 
   // Only focus if not disabled and not already focused (improves accessibility)

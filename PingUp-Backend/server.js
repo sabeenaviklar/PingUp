@@ -1039,7 +1039,7 @@ io.on('connection', async (socket) => {
         ;[...socket.rooms].forEach(r => { if (r !== socket.id) socket.leave(r); });
         socket.join(roomName);
         socket.currentRoom = roomName;
-        const history = await Message.find({ roomName, deleted: false })
+        const history = await Message.find({ roomName, deleted: false, parentMessageId: null })
             .sort({ createdAt: -1 }).limit(50).lean();
         const pinnedIds = room.pinnedMessages.map(id => id.toString());
         socket.emit('room:history', {
@@ -1078,7 +1078,7 @@ io.on('connection', async (socket) => {
         socket.join(channelId);
         socket.currentRoom = room.name;
         socket.currentChannelId = channelId;
-        const history = await Message.find({ roomName: room.name, deleted: false })
+        const history = await Message.find({ roomName: room.name, deleted: false, parentMessageId: null })
             .sort({ createdAt: -1 }).limit(50).lean();
         const pinnedIds = room.pinnedMessages.map(id => id.toString());
         socket.emit('channel:history', {

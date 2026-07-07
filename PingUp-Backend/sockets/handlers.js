@@ -391,27 +391,34 @@ function setupHandlers(io, socket) {
 
         let reaction = message.reactions.find(r => r.emoji === emoji);
         const userId = socket.user.id;
+        const username = socket.user.username;
+        let action = 'add';
 
         if (!reaction) {
-            message.reactions.push({ emoji, users: [userId] });
+            message.reactions.push({ emoji, users: [{ userId, username }] });
         } else {
-            const alreadyReacted = reaction.users.map(u => u.toString()).includes(userId);
-            if (alreadyReacted) {
-                reaction.users = reaction.users.filter(u => u.toString() !== userId);
+            const userIndex = reaction.users.findIndex(u => {
+                const uid = u.userId || u;
+                return uid.toString() === userId;
+            });
+            if (userIndex !== -1) {
+                reaction.users.splice(userIndex, 1);
+                action = 'remove';
                 if (reaction.users.length === 0) {
                     message.reactions = message.reactions.filter(r => r.emoji !== emoji);
                 }
             } else {
-                reaction.users.push(userId);
+                reaction.users.push({ userId, username });
             }
         }
         await message.save();
-        const updatedMessage = await Message.findById(messageId);
+        
         const room = await Room.findOne({ name: message.roomName });
         if (room) {
-            const payload = { messageId, reactions: updatedMessage.reactions };
-            io.to(room._id.toString()).emit('message:reaction:update', payload);
-            io.to(message.roomName).emit('message:reaction:update', payload);
+            const eventName = action === 'add' ? 'message:reaction:add' : 'message:reaction:remove';
+            const payload = { messageId, emoji, user: { userId, username } };
+            io.to(room._id.toString()).emit(eventName, payload);
+            io.to(message.roomName).emit(eventName, payload);
         }
     }, 'Failed to react to message.'));
 

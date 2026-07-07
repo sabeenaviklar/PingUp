@@ -7432,6 +7432,12 @@ body {
   transform: translateY(-1px);
 }
 
+.msg-reaction-chip-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 .msg-pinned-time {
   display: block;
   font-size: 12px;

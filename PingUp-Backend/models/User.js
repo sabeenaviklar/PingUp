@@ -54,6 +54,18 @@ const userSchema = new mongoose.Schema(
     default: false,
   },
 
+  status: {
+    type: String,
+    enum: ['online', 'idle', 'dnd', 'invisible'],
+    default: 'online'
+  },
+
+  customStatus: {
+    type: String,
+    default: '',
+    maxlength: 100
+  },
+
   socketId: {
     type: String,
     default: null,
@@ -101,6 +113,8 @@ userSchema.methods.toSafeObject = function () {
     displayName: this.displayName || this.username,
     role: this.role,
     online: this.online,
+    status: this.status,
+    customStatus: this.customStatus,
     isFirst: this.isFirst,
   };
 };
@@ -115,6 +129,8 @@ userSchema.methods.toPrivateProfile = function () {
     email: this.email,
     phone: this.phone,
     online: this.online,
+    status: this.status,
+    customStatus: this.customStatus,
     isFirst: this.isFirst,
   };
 };

@@ -257,6 +257,7 @@ export default function DMSidebar({
         </div>
 
         <ProfileMenu
+          socket={socket}
           showProfileMenu={showProfileMenu}
           currentUser={currentUser}
           onOpenProfile={onOpenProfile}

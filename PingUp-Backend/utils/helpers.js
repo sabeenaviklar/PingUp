@@ -3,7 +3,7 @@ const User = require('../models/User');
 const Room = require('../models/Room');
 const ServerSettings = require('../models/ServerSettings');
 const { verifyToken } = require('../middleware/auth');
-const { getOnlineUserIds } = require('../services/redis');
+const { getAllPresence } = require('../services/redis');
 
 function rollRole() {
     return Math.random() < 0.30 ? ROLES.MODERATOR : ROLES.MEMBER;
@@ -21,13 +21,27 @@ function safeSocketHandler(socket, eventName, handler, clientMessage = 'Somethin
 }
 
 async function broadcastUserList(io) {
-    const onlineUserIds = await getOnlineUserIds();
-    if (onlineUserIds.length === 0) {
+    const presenceMap = await getAllPresence();
+    const visibleIds = Object.keys(presenceMap).filter(id => presenceMap[id].status !== 'invisible');
+    
+    if (visibleIds.length === 0) {
         io.emit('users:update', []);
         return;
     }
-    const users = await User.find({ _id: { $in: onlineUserIds } });
-    io.emit('users:update', users.map(u => u.toSafeObject()));
+    const users = await User.find({ _id: { $in: visibleIds } });
+    
+    const payload = users.map(u => {
+        const safeUser = u.toSafeObject();
+        const p = presenceMap[u._id.toString()];
+        if (p) {
+            safeUser.status = p.status || 'online';
+            safeUser.customStatus = p.customStatus || '';
+            safeUser.online = true;
+        }
+        return safeUser;
+    });
+    
+    io.emit('users:update', payload);
 }
 
 async function evictUnauthorizedSockets(io, room) {

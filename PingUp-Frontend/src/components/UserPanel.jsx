@@ -3,14 +3,36 @@ import { getApiUrl } from '../api';
 
 const ROLE_ORDER = { owner: 0, moderator: 1, member: 2 };
 
+const STATUS_COLORS = {
+  online: '#23a55a',
+  idle: '#f0b232',
+  dnd: '#f23f42',
+  invisible: '#80848e',
+  offline: '#80848e'
+};
+
+const STATUS_ICONS = {
+  online: '',
+  idle: '🌙',
+  dnd: '⛔',
+  invisible: '',
+  offline: ''
+};
+
 function UserAvatar({ user }) {
+  const status = user.online ? (user.status || 'online') : 'offline';
+  const color = STATUS_COLORS[status];
+  const icon = STATUS_ICONS[status];
+
   return (
     <div className={`up-avatar up-avatar-${user.role}`}>
       {user.username?.[0]?.toUpperCase()}
       <span
         className="up-status-dot"
-        style={{ background: user.online ? '#23a55a' : '#80848e' }}
-      />
+        style={{ background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', color: '#fff' }}
+      >
+        {icon}
+      </span>
     </div>
   );
 }
@@ -40,12 +62,17 @@ export default function UserPanel({
   }, [token]);
 
   // ── Merge online status from socket into allUsers ─────────────
-  const onlineIds = new Set((onlineUsers || []).map(u => u.id || u._id?.toString()));
+  const onlineMap = new Map((onlineUsers || []).map(u => [u.id || u._id?.toString(), u]));
 
-  const mergedUsers = allUsers.map(u => ({
-    ...u,
-    online: onlineIds.has(u.id),
-  }));
+  const mergedUsers = allUsers.map(u => {
+    const activeData = onlineMap.get(u.id);
+    return {
+      ...u,
+      online: !!activeData,
+      status: activeData ? activeData.status : 'offline',
+      customStatus: activeData ? activeData.customStatus : u.customStatus || ''
+    };
+  });
 
   // ── Group by role, sort online first within each group ─────────
   const filtered = mergedUsers.filter(u =>
@@ -96,12 +123,19 @@ export default function UserPanel({
         title={isMe ? 'You' : `Message ${user.username}`}
       >
         <UserAvatar user={user} />
-        <div className="up-user-info">
-          <span className="up-username">
-            {user.username}
-            {isMe && <span className="up-you-tag"> (you)</span>}
-          </span>
-          <span className={`up-role-label up-role-${user.role}`}>{user.role}</span>
+        <div className="up-user-info" style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span className="up-username">
+              {user.username}
+              {isMe && <span className="up-you-tag"> (you)</span>}
+            </span>
+            <span className={`up-role-label up-role-${user.role}`}>{user.role}</span>
+          </div>
+          {user.customStatus && (
+            <div className="up-custom-status" style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>
+               {user.customStatus}
+            </div>
+          )}
         </div>
 
         {/* Owner quick-action menu */}

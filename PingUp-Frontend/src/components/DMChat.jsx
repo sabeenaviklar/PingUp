@@ -178,6 +178,7 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
           setMessages(prev => prev.map(m => m.id === clientId ? { ...m, status: 'failed' } : m));
         } else {
           setMessages(prev => prev.map(m => m.id === clientId ? { ...m, id: resp.id || m.id, audioUrl, status: 'sent' } : m));
+          URL.revokeObjectURL(tempUrl);
         }
       });
     } catch (err) {
@@ -185,7 +186,6 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
       setMessages(prev => prev.map(m => m.id === clientId ? { ...m, status: 'failed' } : m));
     }
   };
-
   function handleChange(e) {
     setText(e.target.value);
     if (!typing) {

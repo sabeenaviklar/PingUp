@@ -1,0 +1,58 @@
+# GitHub Actions Workflow: Universal Issue Closed Comment
+name: Issue Closed Comment
+
+# Trigger execution whenever an issue transitions to the 'closed' state
+on:
+  issues:
+    types: [closed]
+
+# Minimum required permissions to post comments on repository issues
+permissions:
+  issues: write
+
+jobs:
+  comment-on-close:
+    name: Comment on Issue Closure
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Post Closing Comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Extract context parameters
+            const issue = context.payload.issue;
+            const creator = issue.user.login;
+            
+            const repoName = context.repo.repo; // Dynamically gets the current repository name
+
+            // Check if the issue was closed via a pull request
+            const wasClosedViaPR = issue.pull_request !== undefined;
+
+            let commentBody = "";
+
+            if (wasClosedViaPR) {
+              commentBody = `### ✅ Issue Resolved & Closed\n\n` +
+                            `Thank you, @${creator}, for your contributions to **${repoName}**! 🌟\n\n` +
+                            `Your pull request has successfully resolved this issue. Your support and involvement help keep this project robust and growing. 🚀`;
+              
+            } else {
+              commentBody = `### 🔒 Issue Closed\n\n` +
+                            `Thank you, @${creator}, for taking the time to report or engage with this issue in **${repoName}**! 🛡️\n\n` +
+                            `Even if this was closed without a direct code merge, your input helps us manage and track our project roadmap effectively.`;
+                            
+            }
+
+            commentBody += `\n\nIf you discover new edge cases, find bugs, or have ideas for enhancements, feel free to open a new issue. Happy coding! ✨`;
+
+            // Call GitHub API to post the comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              
+              issue_number: issue.number,
+              body: commentBody
+            });
+
+            

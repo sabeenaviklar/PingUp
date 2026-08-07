@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 export default function ProfileMenu({
   showProfileMenu,
   currentUser,
@@ -12,10 +14,60 @@ export default function ProfileMenu({
   setShowNewCategory,
   setShowLogoutModal,
 }) {
+  const menuRef = useRef(null);
+
+  // Basic modal focus management: focus the first item on open, keep Tab
+  // focus inside the menu, close on Escape, and restore focus on close.
+  useEffect(() => {
+    if (!showProfileMenu) return;
+
+    const previouslyFocused = document.activeElement;
+
+    // Focus the first focusable item when the menu opens
+    menuRef.current?.querySelector('button')?.focus();
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowProfileMenu(false);
+        return;
+      }
+      if (e.key === 'Tab') {
+        const focusables = menuRef.current?.querySelectorAll('button');
+        if (!focusables || focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      // Restore focus to the element that opened the menu
+      if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+        previouslyFocused.focus();
+      }
+    };
+  }, [showProfileMenu, setShowProfileMenu]);
+
   if (!showProfileMenu) return null;
 
   return (
-    <div className="dm-profile-menu">
+    <div
+      className="dm-profile-menu"
+      ref={menuRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Profile and settings menu"
+    >
       <div className="dm-profile-menu-header">
         <div className={`dm-pm-avatar avatar-${currentUser.role}`}>
           {currentUser.username[0].toUpperCase()}
@@ -70,6 +122,8 @@ export default function ProfileMenu({
       <button
         className="dm-pm-item danger" onClick={() => {
           setShowLogoutModal(true);
+          // Close the menu so its focus trap doesn't stay active over the modal
+          setShowProfileMenu(false);
         }} >
         🚪 Log Out
       </button>

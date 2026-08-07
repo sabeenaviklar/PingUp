@@ -11,6 +11,8 @@ export default function VoiceRecorder({ onAudioRecorded, onCancel, disabled }) {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef = useRef(null);
+  const streamRef = useRef(null);
+  const cancelledRef = useRef(false);
 
   const startRecording = async () => {
     setPermissionError(null);
@@ -19,6 +21,7 @@ export default function VoiceRecorder({ onAudioRecorded, onCancel, disabled }) {
     setAudioUrl(null);
     audioChunksRef.current = [];
     setRecordingTime(0);
+    cancelledRef.current = false;
 
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -26,6 +29,11 @@ export default function VoiceRecorder({ onAudioRecorded, onCancel, disabled }) {
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Release any previous stream before swapping
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      streamRef.current = stream;
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
 
@@ -36,14 +44,27 @@ export default function VoiceRecorder({ onAudioRecorded, onCancel, disabled }) {
       };
 
       mediaRecorder.onstop = () => {
+        // Ignore stale onstop events from a recorder that is no longer active
+        // (e.g. a new recording was started before this onstop fired).
+        if (mediaRecorderRef.current !== mediaRecorder) return;
+
+        // Stop all audio tracks to release microphone lock
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
+
+        // If this recording was cancelled, discard it (don't rebuild a preview)
+        if (cancelledRef.current) {
+          cancelledRef.current = false;
+          return;
+        }
+
         const mimeType = mediaRecorder.mimeType || 'audio/webm';
         const blob = new Blob(audioChunksRef.current, { type: mimeType });
         const url = URL.createObjectURL(blob);
         setAudioBlob(blob);
         setAudioUrl(url);
-
-        // Stop all audio tracks to release microphone lock
-        stream.getTracks().forEach(track => track.stop());
       };
 
       mediaRecorder.start(100);
@@ -68,6 +89,8 @@ export default function VoiceRecorder({ onAudioRecorded, onCancel, disabled }) {
 
   const cancelRecording = () => {
     if (mediaRecorderRef.current && recording) {
+      // Mark as cancelled so the async onstop handler doesn't restore the preview
+      cancelledRef.current = true;
       mediaRecorderRef.current.stop();
     }
     setRecording(false);
@@ -91,6 +114,18 @@ export default function VoiceRecorder({ onAudioRecorded, onCancel, disabled }) {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+
+      // If the component unmounts mid-recording, stop the recorder and
+      // release the microphone so it isn't left active.
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        cancelledRef.current = true; // discard the in-flight onstop preview
+        mediaRecorderRef.current.stop();
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+
       if (audioUrl) URL.revokeObjectURL(audioUrl);
     };
   }, [audioUrl]);

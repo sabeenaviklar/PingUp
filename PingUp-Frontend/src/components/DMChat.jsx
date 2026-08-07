@@ -3,6 +3,8 @@ import { apiFetch } from '../api';
 import { useDraftMessage } from '../hooks/useDraftMessage';
 import MarkdownMessage from './MarkdownMessage';
 import SearchPanel from './SearchPanel';
+import AudioPlayer from './AudioPlayer';
+import VoiceRecorder from './VoiceRecorder';
 
 // Generate a temporary client-side ID for optimistic message rendering
 function generateClientId() {
@@ -168,6 +170,11 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
       }
       const audioUrl = data.audioUrl || data.fileUrl || data.url;
 
+      // Upload finished — swap the temporary blob preview for the real server
+      // URL and release the blob object URL to avoid a memory leak.
+      setMessages(prev => prev.map(m => m.id === clientId ? { ...m, audioUrl } : m));
+      URL.revokeObjectURL(tempUrl);
+
       emitWithRetry(socket, 'dm:send', {
         toUserId: otherUser.id,
         text: '',
@@ -177,13 +184,14 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
         if (resp.error) {
           setMessages(prev => prev.map(m => m.id === clientId ? { ...m, status: 'failed' } : m));
         } else {
-          setMessages(prev => prev.map(m => m.id === clientId ? { ...m, id: resp.id || m.id, audioUrl, status: 'sent' } : m));
-          URL.revokeObjectURL(tempUrl);
+          setMessages(prev => prev.map(m => m.id === clientId ? { ...m, id: resp.id || m.id, status: 'sent' } : m));
         }
       });
     } catch (err) {
       console.error(err);
-      setMessages(prev => prev.map(m => m.id === clientId ? { ...m, status: 'failed' } : m));
+      // Upload failed — drop the optimistic message and release the blob URL
+      setMessages(prev => prev.filter(m => m.id !== clientId));
+      URL.revokeObjectURL(tempUrl);
     }
   };
   function handleChange(e) {

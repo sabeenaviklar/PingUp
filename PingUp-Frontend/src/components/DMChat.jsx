@@ -31,6 +31,10 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
   const [showSearch, setShowSearch]   = useState(false);
   const bottomRef                     = useRef(null);
   const typingTimeout                 = useRef(null);
+  // Heartbeat that refreshes the server-side dm:typing TTL while typing, so
+  // the indicator stays visible for long messages and never gets stuck if we
+  // disconnect mid-typing (the server auto-clears after ~4s without a beat).
+  const typingHeartbeat               = useRef(null);
   const inputRef                      = useRef(null);
 
   // Auto-focus input when opening DM (removed unnecessary setTimeout)
@@ -95,6 +99,10 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
       socket.off('dm:read', onRead);
       socket.off('disconnect', onDisconnect);
       socket.emit('dm:leave', { otherUserId });
+      if (typingHeartbeat.current) {
+        clearInterval(typingHeartbeat.current);
+        typingHeartbeat.current = null;
+      }
     };
   }, [currentUserId, otherUserId, token, socket, currentUsername]);
 
@@ -141,6 +149,10 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
       }
     });
     clearTimeout(typingTimeout.current);
+    if (typingHeartbeat.current) {
+      clearInterval(typingHeartbeat.current);
+      typingHeartbeat.current = null;
+    }
     socket.emit('dm:typing:stop', { toUserId: otherUser.id });
     setTyping(false);
   }
@@ -150,10 +162,19 @@ export default function DMChat({ currentUser, otherUser, token, socket, onClose 
     if (!typing) {
       setTyping(true);
       socket.emit('dm:typing:start', { toUserId: otherUser.id });
+      if (!typingHeartbeat.current) {
+        typingHeartbeat.current = setInterval(() => {
+          socket.emit('dm:typing:start', { toUserId: otherUser.id });
+        }, 2000);
+      }
     }
     clearTimeout(typingTimeout.current);
     typingTimeout.current = setTimeout(() => {
       setTyping(false);
+      if (typingHeartbeat.current) {
+        clearInterval(typingHeartbeat.current);
+        typingHeartbeat.current = null;
+      }
       socket.emit('dm:typing:stop', { toUserId: otherUser.id });
     }, 1200);
   }

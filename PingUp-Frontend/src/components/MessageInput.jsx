@@ -30,8 +30,25 @@ export default function MessageInput({
   
   const typingRef = useRef(false);
   const typingTimer = useRef(null);
+  // Heartbeat that refreshes the server-side typing TTL while actively typing.
+  // The server auto-clears the indicator after ~4s without a typing:start,
+  // so this keeps "X is typing…" visible for long messages and guarantees
+  // it disappears if we disconnect mid-typing.
+  const typingHeartbeat = useRef(null);
+  const stopTypingHeartbeat = () => {
+    if (typingHeartbeat.current) {
+      clearInterval(typingHeartbeat.current);
+      typingHeartbeat.current = null;
+    }
+  };
   const fileInputRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Stop the heartbeat interval on unmount (avoids a leaked interval).
+  useEffect(() => () => {
+    clearTimeout(typingTimer.current);
+    stopTypingHeartbeat();
+  }, []);
 
   const isOwner    = currentUser?.role === 'owner';
   const isLocked   = roomSettings?.isLocked;
@@ -94,6 +111,7 @@ export default function MessageInput({
     if (typingRef.current) {
       onTypingStop();
       typingRef.current = false;
+      stopTypingHeartbeat();
     }
 
     // Restore focus after sending (auto-focus feature)
@@ -115,12 +133,17 @@ export default function MessageInput({
     if (!typingRef.current) {
       typingRef.current = true;
       onTypingStart();
+      stopTypingHeartbeat();
+      typingHeartbeat.current = setInterval(() => {
+        if (typingRef.current) onTypingStart(); // refresh server-side TTL
+      }, 2000);
     }
 
     clearTimeout(typingTimer.current);
 
     typingTimer.current = setTimeout(() => {
       typingRef.current = false;
+      stopTypingHeartbeat();
       onTypingStop();
     }, 1500);
   }, [setText, onTypingStart, onTypingStop]);

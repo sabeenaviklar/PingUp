@@ -300,13 +300,15 @@ const [threadReplies, setThreadReplies] = useState([]);
       setMessages(prev => prev.map(m => m.id === id ? { ...m, pinned: false } : m));
     });
 
-    socket.on('typing:update', ({ username, typing }) =>
+    socket.on('typing:update', ({ username, typing }) => {
+      // Never show our own typing indicator (server broadcasts include us now)
+      if (username === currentUser.username) return;
       setTypingUsers(prev =>
         typing
           ? [...new Set([...prev, username])]
           : prev.filter(u => u !== username)
-      )
-    );
+      );
+    });
 
     socket.on('dm:notification', notif => {
       if (document.visibilityState !== 'visible' || activeDMRef.current?.id !== notif.fromId) {

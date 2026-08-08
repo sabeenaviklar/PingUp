@@ -5,6 +5,7 @@ const Message = require('../models/Message');
 const DirectMessage = require('../models/DirectMessage');
 const { ROLES, hasPermission, ROLE_WEIGHTS } = require('../data/store');
 const { processCommand } = require('./commands');
+const { startTyping, stopTyping, clearUserTyping } = require('./typingState');
 const { messageQueue } = require('../services/messageQueue');
 const { 
     safeSocketHandler, 
@@ -157,14 +158,16 @@ function setupHandlers(io, socket) {
     }, 'Message failed to send.'));
 
     socket.on('typing:start', ({ roomName, channelId }) => {
-        socket.to(channelId || roomName).emit('typing:update', {
-            username: socket.user.username, typing: true,
+        const target = channelId || roomName;
+        if (!target) return;
+        startTyping(target, socket.user.id, socket.user.username, (username, typing) => {
+            io.to(target).emit('typing:update', { username, typing });
         });
     });
     socket.on('typing:stop', ({ roomName, channelId }) => {
-        socket.to(channelId || roomName).emit('typing:update', {
-            username: socket.user.username, typing: false,
-        });
+        const target = channelId || roomName;
+        if (!target) return;
+        stopTyping(target, socket.user.id);
     });
 
     socket.on('channel:create', safeSocketHandler(socket, 'channel:create', async ({ categoryId, name, description, emoji }) => {
@@ -666,12 +669,23 @@ function setupHandlers(io, socket) {
     }));
 
     socket.on('dm:typing:start', ({ toUserId }) => {
-        const convId = [socket.user.id, toUserId].sort().join('_');
-        socket.to(`dm:${convId}`).emit('dm:typing', { username: socket.user.username, typing: true });
+        if (!toUserId) return;
+        const target = `dm:${[socket.user.id, toUserId].sort().join('_')}`;
+        startTyping(target, socket.user.id, socket.user.username, (username, typing) => {
+            io.to(target).emit('dm:typing', { username, typing });
+        });
     });
     socket.on('dm:typing:stop', ({ toUserId }) => {
-        const convId = [socket.user.id, toUserId].sort().join('_');
-        socket.to(`dm:${convId}`).emit('dm:typing', { username: socket.user.username, typing: false });
+        if (!toUserId) return;
+        const target = `dm:${[socket.user.id, toUserId].sort().join('_')}`;
+        stopTyping(target, socket.user.id);
+    });
+
+    // Safety net: if a user disconnects mid-typing (tab closed, Wi-Fi drop),
+    // broadcast typing:false for every target they were typing in so other
+    // users never see a stuck "X is typing…" indicator.
+    socket.on('disconnect', () => {
+        if (socket.user?.id) clearUserTyping(socket.user.id);
     });
 }
 

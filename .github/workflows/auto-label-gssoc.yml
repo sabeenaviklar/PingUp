@@ -4,7 +4,6 @@ on:
   issues:
     types: [opened]
     
-  workflow_dispatch:
 
 jobs:
   add-gssoc-label:
@@ -22,7 +21,7 @@ jobs:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            if (!context.payload.issue) return;
+            
             const issue_number = context.payload.issue.number;            
             const labelName = 'gssoc26';
             const color = 'F9D0C4'; // Clean hex color for GSSoC label

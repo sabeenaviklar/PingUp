@@ -13,7 +13,9 @@ import DMChat       from './components/DMChat';
 import DMList       from './components/DMList';
 import AdminPanel   from './components/AdminPanel';
 import VoiceChannel from './components/VoiceChannel';
+import SearchPanel  from './components/SearchPanel';
 import NotFound     from './pages/NotFound';
+import { apiFetch } from './api';
 
 // Channel names that render as the music/voice player instead of a text chat
 const VOICE_CHANNELS = ['music-lounge'];
@@ -31,7 +33,7 @@ export default function App() {
     const u = localStorage.getItem('user');
     return u ? JSON.parse(u) : null;
   });
-  const [token, setToken] = useState(() => localStorage.getItem('token') || '');
+  const [token, setToken] = useState('');
 
   // ── Server state ───────────────────────────────────────────────
   const [categories,    setCategories]    = useState([]);
@@ -55,21 +57,61 @@ const [threadReplies, setThreadReplies] = useState([]);
   const [dmToast,       setDmToast]       = useState(null);
   const dmToastTimeoutRef = useRef(null);
   const [allowUserChannelCreation, setAllowUserChannelCreation] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
 
   const [socketInstance, setSocketInstance] = useState(null);
   const socketRef = useRef(null);
   const activeChannelRef = useRef(activeChannel);
+  const activeDMRef = useRef(activeDM);
+  const categoriesRef = useRef(categories);
 
   useEffect(() => {
     activeChannelRef.current = activeChannel;
   }, [activeChannel]);
+
+  useEffect(() => {
+    activeDMRef.current = activeDM;
+  }, [activeDM]);
+
+  useEffect(() => {
+    categoriesRef.current = categories;
+  }, [categories]);
+
+  useEffect(() => {
+    if ('serviceWorker' in navigator && 'Notification' in window) {
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        console.log('Service Worker registered', reg);
+      }).catch(err => console.error('SW registration failed', err));
+
+
+
+      const handleSWMessage = (event) => {
+        if (event.data?.type === 'NAVIGATE') {
+          const payload = event.data.payload || {};
+          if (payload.type === 'channel' && payload.channelName) {
+            const ch = categoriesRef.current.flatMap(c => c.channels).find(c => c.name === payload.channelName);
+            if (ch) {
+              setActiveDM(null);
+              setShowFriends(false);
+              setActiveChannel(ch);
+            }
+          } else if (payload.type === 'dm' && payload.dmUserId) {
+            setActiveChannel(null);
+            setShowFriends(false);
+            setActiveDM({ id: payload.dmUserId, username: payload.dmUsername });
+          }
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', handleSWMessage);
+      return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+    }
+  }, []);
 
   const isVoiceChannel = activeChannel && VOICE_CHANNELS.includes(activeChannel.name);
   const isOwner        = currentUser?.role === 'owner';
 
   const handleLogout = useCallback(() => {
     disconnectSocket();
-    localStorage.removeItem('token');
     localStorage.removeItem('user');
     setCurrentUser(null);
     setToken('');
@@ -86,7 +128,7 @@ const [threadReplies, setThreadReplies] = useState([]);
 
   // ── Socket setup ───────────────────────────────────────────────
   useEffect(() => {
-    if (!token || !currentUser) return;
+    if (!currentUser) return;
     const socket = getSocket(token);
     socketRef.current = socket;
     socket.connect();
@@ -142,9 +184,27 @@ const [threadReplies, setThreadReplies] = useState([]);
       setCommandResps(prev => [...prev, res])
     );
 
-    socket.on('message:new', (msg) => {
+    const triggerPushNotification = async (title, options) => {
+      if (Notification.permission === 'granted' && navigator.serviceWorker) {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          reg.showNotification(title, options);
+        } catch (err) {
+          console.error('Push notification failed', err);
+        }
+      }
+    };
 
-  if (msg.parentMessageId) {
+    socket.on('message:new', (msg) => {
+      if (document.visibilityState !== 'visible' || activeChannelRef.current?.name !== msg.roomName) {
+        triggerPushNotification(`New message in #${msg.roomName}`, {
+          body: `${msg.username}: ${msg.text}`,
+          icon: '/favicon.svg',
+          data: { type: 'channel', channelName: msg.roomName }
+        });
+      }
+
+      if (msg.parentMessageId) {
     setThreadReplies(prev =>
       prev.find(m => m.id === msg.id)
         ? prev
@@ -186,13 +246,16 @@ const [threadReplies, setThreadReplies] = useState([]);
         prev.map(m => m.id === id ? { ...m, deleted: true, text: '[message deleted]' } : m)
       );
     });
-    socket.on('message:edited', ({ id, text, editedAt, hasEditHistory }) => {
+    socket.on('message:edited', ({ id, text, editedAt, hasEditHistory, username }) => {
       setMessages(prev =>
         prev.map(m => m.id === id ? { ...m, text, editedAt, hasEditHistory } : m)
       );
       setThreadReplies(prev =>
         prev.map(m => m.id === id ? { ...m, text, editedAt, hasEditHistory } : m)
       );
+      if (username && username !== currentUser.username) {
+        setNotifications(prev => [...prev, `✏️ @${username} edited their message`]);
+      }
     });
 
     socket.on('message:reaction:add', ({ messageId, emoji, user }) => {
@@ -249,6 +312,14 @@ const [threadReplies, setThreadReplies] = useState([]);
     );
 
     socket.on('dm:notification', notif => {
+      if (document.visibilityState !== 'visible' || activeDMRef.current?.id !== notif.fromId) {
+        triggerPushNotification(`New DM from ${notif.from}`, {
+          body: notif.preview,
+          icon: '/favicon.svg',
+          data: { type: 'dm', dmUserId: notif.fromId, dmUsername: notif.from }
+        });
+      }
+
       setDmNotifs(prev => [...prev, notif]);
       setDmToast(notif);
       if (dmToastTimeoutRef.current) {
@@ -295,11 +366,36 @@ const [threadReplies, setThreadReplies] = useState([]);
   // ── Auth ───────────────────────────────────────────────────────
   const handleLogin = (user, tok) => {
     setCurrentUser(user);
-    setToken(tok);
+    setToken(tok || '');
     setSessionMsg(null); 
-    localStorage.setItem('token', tok);
     localStorage.setItem('user',  JSON.stringify(user));
+    
+    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+      Notification.requestPermission();
+    }
   };
+
+  // Verify auth cookie on startup
+  useEffect(() => {
+    if (currentUser) {
+      apiFetch('/api/auth/me')
+        .then(res => {
+          if (res.ok) {
+            return res.json();
+          } else if (res.status === 401) {
+            handleLogout();
+          }
+        })
+        .then(data => {
+          if (data && data.user) {
+            setCurrentUser(data.user);
+            localStorage.setItem('user', JSON.stringify(data.user));
+          }
+        })
+        .catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleLogout]);
 
 
   // ── Channel select ─────────────────────────────────────────────
@@ -309,6 +405,7 @@ const [threadReplies, setThreadReplies] = useState([]);
     setActiveDM(null);
     setShowFriends(false);
     setShowAdmin(false);
+    setShowSearch(false);
     setTypingUsers([]);
     setMessages([]);
     // Voice channels don't need a text channel:join
@@ -473,6 +570,16 @@ const [threadReplies, setThreadReplies] = useState([]);
               )}
             </div>
 
+            <div className="chat-header-actions">
+              <button
+                className={`hdr-admin-btn ${showSearch ? 'hdr-btn-active' : ''}`}
+                title="Search messages"
+                onClick={() => setShowSearch(!showSearch)}
+              >
+                🔍
+              </button>
+            </div>
+
             {/* Owner quick-controls */}
             {isOwner && (
               <div className="chat-header-admin-btns">
@@ -544,6 +651,13 @@ const [threadReplies, setThreadReplies] = useState([]);
             channelId={activeChannel.id}
             token={token}
           />
+          {showSearch && (
+            <SearchPanel
+              channelId={activeChannel.id}
+              token={token}
+              onClose={() => setShowSearch(false)}
+            />
+          )}
         </>
       );
     }
@@ -635,6 +749,7 @@ const [threadReplies, setThreadReplies] = useState([]);
           onClose={() => setShowProfile(false)}
           onLogout={handleLogout}
           setCurrentUser={setCurrentUser}
+          token={token}
         />
       )}
 

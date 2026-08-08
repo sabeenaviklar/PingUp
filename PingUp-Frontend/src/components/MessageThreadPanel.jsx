@@ -1,3 +1,5 @@
+import { formatRelativeTime } from '../utils/formatRelativeTime';
+
 export default function MessageThreadPanel({
   selectedThread,
   onOpenThread,
@@ -13,6 +15,8 @@ export default function MessageThreadPanel({
   handleEditSave,
   handleEditCancel,
   handleDelete,
+  handleReaction,
+  handleEditReaction,
   threadReplyText,
   setThreadReplyText,
   socket,
@@ -49,7 +53,9 @@ export default function MessageThreadPanel({
             <div className="msg-thread-reply-user">
               {reply.username}
               {reply.editedAt && (
-                <span className="msg-edited-tag" title="Edited">✏️ edited</span>
+                <span className="msg-edited-tag" title={`Edited ${new Date(reply.editedAt).toLocaleString()}`}>
+                  ✏️ edited {formatRelativeTime(reply.editedAt)}
+                </span>
               )}
             </div>
 
@@ -83,6 +89,36 @@ export default function MessageThreadPanel({
                 {reply.deleted ? '[message deleted]' : reply.text}
               </div>
             )}
+            
+            {reply.reactions?.length > 0 && (
+              <div className="msg-reactions">
+                {reply.reactions.map((reaction, idx) => (
+                  <button
+                    key={idx}
+                    className="msg-reaction-chip"
+                    onClick={() => handleReaction(reply.id, reaction.emoji)}
+                  >
+                    <span>{reaction.emoji}</span>
+                    <span>{reaction.users.length}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {reply.editReactions?.length > 0 && (
+              <div className="msg-reactions msg-edit-reactions">
+                {reply.editReactions.map((reaction, idx) => (
+                  <button
+                    key={idx}
+                    className="msg-reaction-chip msg-edit-reaction-chip"
+                    onClick={() => handleEditReaction(reply.id, reaction.emoji)}
+                    title="Reaction to edit"
+                  >
+                    ✏️ <span>{reaction.emoji}</span>
+                    <span>{reaction.users.length}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {!reply.deleted && hoveredReply === reply.id && (
               <div className="msg-toolbar">
@@ -96,6 +132,21 @@ export default function MessageThreadPanel({
                     }}
                   >✏️</button>
                 )}
+                
+                <button
+                  className="msg-toolbar-btn"
+                  title="React"
+                  onClick={() => handleReaction(reply.id, '👍')}
+                >👍</button>
+
+                {reply.editedAt && (
+                  <button
+                    className="msg-toolbar-btn msg-toolbar-btn-edit-react"
+                    title="React to Edit"
+                    onClick={() => handleEditReaction(reply.id, '👍')}
+                  >✏️👍</button>
+                )}
+
                 {isMod && (
                   <button
                     className="msg-toolbar-btn msg-toolbar-btn-delete"

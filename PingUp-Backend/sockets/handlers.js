@@ -13,10 +13,17 @@ const {
     getServerSetting, 
     broadcastSettings, 
     roomToChannel,
-    evictUnauthorizedSockets
+    evictUnauthorizedSockets,
+    sanitizeCategoryId,
 } = require('../utils/helpers');
 
 const MAX_MESSAGE_LENGTH = 2000;
+
+function leaveCurrentDM(socket) {
+    if (!socket.currentDM) return;
+    socket.leave(`dm:${socket.currentDM}`);
+    socket.currentDM = null;
+}
 
 function setupHandlers(io, socket) {
     socket.on('room:join', safeSocketHandler(socket, 'room:join', async ({ roomName }) => {
@@ -26,6 +33,7 @@ function setupHandlers(io, socket) {
             const allowed = room.allowedUsers.map(id => id.toString()).includes(socket.user.id);
             if (!allowed) return socket.emit('error:permission', 'This channel is private.');
         }
+        leaveCurrentDM(socket);
         ;[...socket.rooms].forEach(r => { if (r !== socket.id) socket.leave(r); });
         socket.join(roomName);
         socket.currentRoom = roomName;
@@ -62,6 +70,7 @@ function setupHandlers(io, socket) {
             const allowed = room.allowedUsers.map(id => id.toString()).includes(socket.user.id);
             if (!allowed) return socket.emit('error:permission', 'This channel is private.');
         }
+        leaveCurrentDM(socket);
         ;[...socket.rooms].forEach(r => { if (r !== socket.id) socket.leave(r); });
         socket.join(channelId);
         socket.currentRoom = room.name;
@@ -82,6 +91,7 @@ function setupHandlers(io, socket) {
                 pinned: pinnedIds.includes(m._id.toString()),
                 editedAt: m.editedAt,
                 editHistory: m.editHistory,
+                editReactions: m.editReactions || [],
                 parentMessageId: m.parentMessageId,
                 replyCount: m.replyCount || 0,
             })),
@@ -169,11 +179,12 @@ function setupHandlers(io, socket) {
         if (!name?.trim()) return;
         const exists = await Room.findOne({ name: name.trim().toLowerCase() });
         if (exists) return socket.emit('error:general', 'Channel name already exists.');
+        const targetCategory = sanitizeCategoryId(categoryId);
         const room = await Room.create({
             name: name.trim().toLowerCase().replace(/\s+/g, '-'),
             description: description?.trim() || '',
             emoji: emoji || '💬',
-            category: categoryId,
+            category: targetCategory,
             createdBy: socket.user.username,
         });
         await broadcastStructure(io);
@@ -357,6 +368,7 @@ function setupHandlers(io, socket) {
             text: trimmed,
             editedAt: updatedMsg.editedAt,
             hasEditHistory: updatedMsg.editHistory.length > 0,
+            username: updatedMsg.username,
         };
 
         const bc = channelId ? io.to(channelId) : io.to(rName);
@@ -380,7 +392,7 @@ function setupHandlers(io, socket) {
             replies: replies.map((m) => ({
                 id: m._id.toString(), userId: m.userId.toString(), username: m.username,
                 role: m.role, text: m.text, timestamp: m.createdAt, deleted: m.deleted,
-                editedAt: m.editedAt, replyCount: m.replyCount, parentMessageId: m.parentMessageId,
+                editedAt: m.editedAt, editReactions: m.editReactions || [], replyCount: m.replyCount, parentMessageId: m.parentMessageId,
             })),
         });
     }));
@@ -422,6 +434,48 @@ function setupHandlers(io, socket) {
         }
     }, 'Failed to react to message.'));
 
+    socket.on('message:edit:reaction', safeSocketHandler(socket, 'message:edit:reaction', async ({ messageId, emoji }) => {
+        let isDM = false;
+        let message = await Message.findById(messageId);
+        if (!message) {
+            message = await DirectMessage.findById(messageId);
+            isDM = true;
+        }
+        if (!message) return socket.emit('error:general', 'Message not found.');
+
+        let reaction = message.editReactions.find(r => r.emoji === emoji);
+        const userId = socket.user.id;
+
+        if (!reaction) {
+            message.editReactions.push({ emoji, users: [userId] });
+        } else {
+            const alreadyReacted = reaction.users.map(u => u.toString()).includes(userId);
+            if (alreadyReacted) {
+                reaction.users = reaction.users.filter(u => u.toString() !== userId);
+                if (reaction.users.length === 0) {
+                    message.editReactions = message.editReactions.filter(r => r.emoji !== emoji);
+                }
+            } else {
+                reaction.users.push(userId);
+            }
+        }
+        await message.save();
+        
+        if (isDM) {
+            const updatedMessage = await DirectMessage.findById(messageId);
+            const payload = { messageId, editReactions: updatedMessage.editReactions };
+            io.to(`dm:${message.conversationId}`).emit('message:edit:reaction:update', payload);
+        } else {
+            const updatedMessage = await Message.findById(messageId);
+            const room = await Room.findOne({ name: message.roomName });
+            if (room) {
+                const payload = { messageId, editReactions: updatedMessage.editReactions };
+                io.to(room._id.toString()).emit('message:edit:reaction:update', payload);
+                io.to(message.roomName).emit('message:edit:reaction:update', payload);
+            }
+        }
+    }, 'Failed to react to edit.'));
+
     socket.on('category:create', safeSocketHandler(socket, 'category:create', async ({ name }) => {
         if (socket.user.role !== 'owner') return socket.emit('error:permission', 'Owner only.');
         if (!name?.trim()) return;
@@ -438,7 +492,18 @@ function setupHandlers(io, socket) {
 
     socket.on('category:delete', safeSocketHandler(socket, 'category:delete', async ({ categoryId }) => {
         if (socket.user.role !== 'owner') return socket.emit('error:permission', 'Owner only.');
-        await Room.deleteMany({ category: categoryId });
+
+        const targetCategory = sanitizeCategoryId(categoryId);
+        if (!targetCategory) return;
+
+        // Clean up message associated with channels in this category to prevent orphaned documents
+        const targetRooms = await Room.find({ category: targetCategory }, 'name');
+        const roomNames = targetRooms.map(r => r.name);
+        if (roomNames.length > 0) {
+            await Message.deleteMany({ roomName: { $in: roomNames } });
+        }
+
+        await Room.deleteMany({ category: targetCategory });
         await broadcastStructure(io);
     }, 'Failed to delete category.'));
 
@@ -509,6 +574,9 @@ function setupHandlers(io, socket) {
 
     socket.on('dm:join', safeSocketHandler(socket, 'dm:join', async ({ otherUserId }) => {
         const convId = [socket.user.id, otherUserId].sort().join('_');
+        if (socket.currentDM && socket.currentDM !== convId) {
+            leaveCurrentDM(socket);
+        }
         socket.join(`dm:${convId}`);
         socket.currentDM = convId;
         await DirectMessage.updateMany(
@@ -516,8 +584,20 @@ function setupHandlers(io, socket) {
             { read: true }
         );
         const otherSocket = [...io.sockets.sockets.values()].find(s => s.user?.id === otherUserId);
-        if (otherSocket) otherSocket.emit('dm:read', { conversationId: convId });
+        if (otherSocket) {
+            otherSocket.emit('dm:read', {
+                conversationId: convId,
+                readerId: String(socket.user.id),
+            });
+        }
     }, 'Failed to open direct message.'));
+
+    socket.on('dm:leave', ({ otherUserId } = {}) => {
+        if (!otherUserId) return;
+        const convId = [socket.user.id, otherUserId].sort().join('_');
+        socket.leave(`dm:${convId}`);
+        if (socket.currentDM === convId) socket.currentDM = null;
+    });
 
     socket.on('dm:send', safeSocketHandler(socket, 'dm:send', async ({ toUserId, text, clientId }, callback) => {
         try {
@@ -553,10 +633,39 @@ function setupHandlers(io, socket) {
             }
 
             const payload = {
-                id: msg._id.toString(), senderId: socket.user.id, senderUsername: socket.user.username,
-                senderRole: socket.user.role, text, timestamp: msg.createdAt, read: false, clientId
+                id: msg._id.toString(), conversationId: convId, senderId: socket.user.id,
+                senderUsername: socket.user.username, senderRole: socket.user.role,
+                text, timestamp: msg.createdAt, read: msg.read || false, clientId
             }
+
+            const receiverViewingChat = [...io.sockets.sockets.values()].some(
+                s => String(s.user?.id) === String(toUserId) && s.currentDM === convId
+            );
+            if (receiverViewingChat && !msg.read) {
+                msg.read = true;
+                await msg.save();
+                payload.read = true;
+            }
+
             io.to(`dm:${convId}`).emit('dm:message', payload);
+            
+            const otherSocket = [...io.sockets.sockets.values()].find(s => s.user?.id === toUserId);
+            if (otherSocket) {
+                const receiverViewingChat = otherSocket.currentDM === convId;
+                if (receiverViewingChat) {
+                    msg.read = true;
+                    await msg.save();
+                    payload.read = true;
+                    socket.emit('dm:read', { conversationId: convId, readerId: String(toUserId) });
+                } else {
+                    otherSocket.emit('dm:notification', {
+                        fromId: socket.user.id,
+                        from: socket.user.username,
+                        preview: text
+                    });
+                }
+            }
+
             if (typeof callback === 'function') callback({ status: 'success', id: msg._id.toString() });
         } catch (err) {
             if (typeof callback === 'function') callback({ error: 'Server error', status: 'failed' });

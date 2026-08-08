@@ -1,11 +1,21 @@
 const express = require('express');
 const router = express.Router();
+const rateLimit = require('express-rate-limit');
 const User = require('../models/User');
-const { generateToken, generateRefreshToken, verifyRefreshToken } = require('../middleware/auth');
+const { generateToken, generateRefreshToken, verifyRefreshToken, requireAuth } = require('../middleware/auth');
 const { ROLES } = require('../data/store');
 const ServerSettings = require('../models/ServerSettings');
 
-router.post('/register', async (req, res) => {
+// Rate limiter for authentication routes: limits each IP to 15 login/register attempts per 15 minutes
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 15,
+    message: { error: 'Too many authentication attempts from this IP, please try again after 15 minutes.' },
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
+router.post('/register', authLimiter, async (req, res) => {
     try {
         const { username, password, email, displayName } = req.body;
         if (!username?.trim() || !password)
@@ -44,6 +54,13 @@ router.post('/register', async (req, res) => {
 
         await user.save();
 
+        res.cookie('token', accessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+            maxAge: 8 * 60 * 60 * 1000 // 8 hours
+        });
+
         res.status(201).json({
             accessToken,
             refreshToken,
@@ -58,7 +75,7 @@ router.post('/register', async (req, res) => {
     }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
     try {
         const { username, password } = req.body;
         const user = await User.findOne({ username: username?.trim().toLowerCase() });
@@ -75,12 +92,30 @@ router.post('/login', async (req, res) => {
 
         await user.save();
 
+        res.cookie('token', accessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+            maxAge: 8 * 60 * 60 * 1000 // 8 hours
+        });
+
         res.json({
             accessToken,
             refreshToken,
             user: user.toPrivateProfile()
         });
     } catch (err) {
+        res.status(500).json({ error: 'Server error.' });
+    }
+});
+
+router.get('/me', requireAuth, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ error: 'User not found.' });
+        res.json({ user: user.toPrivateProfile() });
+    } catch (err) {
+        console.error(err);
         res.status(500).json({ error: 'Server error.' });
     }
 });
@@ -143,6 +178,12 @@ router.post('/logout', async (req, res) => {
             user.refreshToken = null;
             await user.save();
         }
+
+        res.clearCookie('token', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        });
 
         res.json({
             message: 'Logged out successfully'

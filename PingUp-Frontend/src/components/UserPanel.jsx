@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getApiUrl } from '../api';
+import { apiFetch } from '../api';
 
 const ROLE_ORDER = { owner: 0, moderator: 1, member: 2 };
 
@@ -30,14 +30,14 @@ export default function UserPanel({
 
   // ── Fetch ALL registered users once ───────────────────────────
   useEffect(() => {
-    if (!token) return;
-    fetch(getApiUrl('/api/users'), {
-      headers: { Authorization: `Bearer ${token}` },
+    if (!currentUser) return;
+    apiFetch('/api/users', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then(r => r.json())
       .then(data => Array.isArray(data) ? setAllUsers(data) : null)
       .catch(console.error);
-  }, [token]);
+  }, [token, currentUser]);
 
   // ── Merge online status from socket into allUsers ─────────────
   const onlineIds = new Set((onlineUsers || []).map(u => u.id || u._id?.toString()));

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getApiUrl } from '../api';
+import { apiFetch } from '../api';
 
 export default function DMList({ currentUser, token, onlineUsers, onOpenDM, activeDMId, dmNotifications }) {
   const [conversations, setConversations] = useState([]);
@@ -10,14 +10,14 @@ export default function DMList({ currentUser, token, onlineUsers, onOpenDM, acti
   // Refactored duplicate useEffect fetch calls into a single memoized callback.
   // Reduces complexity and eliminates duplicate API calling logic.
   const fetchConversations = useCallback(() => {
-    if (!token) return;
-    fetch(getApiUrl('/api/dm'), {
-      headers: { Authorization: `Bearer ${token}` },
+    if (!currentUser) return;
+    apiFetch('/api/dm', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then(r => r.json())
       .then(data => setConversations(Array.isArray(data) ? data : []))
       .catch(() => {});
-  }, [token]);
+  }, [token, currentUser]);
 
   useEffect(() => {
     fetchConversations();
@@ -37,8 +37,8 @@ export default function DMList({ currentUser, token, onlineUsers, onOpenDM, acti
 
     const delayDebounceFn = setTimeout(() => {
       setIsSearching(true);
-      fetch(getApiUrl(`/api/users/search?q=${encodeURIComponent(searchQuery)}`), {
-        headers: { Authorization: `Bearer ${token}` },
+      apiFetch(`/api/users/search?q=${encodeURIComponent(searchQuery)}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         signal: controller.signal,
       })
         .then(r => r.json())

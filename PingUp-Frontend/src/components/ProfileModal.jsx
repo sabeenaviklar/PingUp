@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { getApiUrl } from '../api';
+import { apiFetch } from '../api';
 
-export default function ProfileModal({ user, onClose, setCurrentUser }) {
+export default function ProfileModal({ user, onClose, setCurrentUser, token }) {
   const [tab, setTab] = useState('security');
   const [editing, setEditing] = useState(null); // 'displayName' | 'username' | 'email' | 'phone'
   const [fields, setFields] = useState({
@@ -30,11 +30,10 @@ export default function ProfileModal({ user, onClose, setCurrentUser }) {
     if (tempVal.trim()) {
       const patch = { [editing]: tempVal.trim() };
       try{
-        const token = localStorage.getItem('token');
-        const res = await fetch(getApiUrl('/api/profile'), { method: 'PUT',
+        const res = await apiFetch('/api/profile', { method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify(patch),
         });

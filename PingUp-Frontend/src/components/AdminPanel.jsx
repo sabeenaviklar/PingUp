@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getApiUrl } from '../api';
+import { apiFetch } from '../api';
 import AdminChannelsTab from './AdminChannelsTab';
 import AdminUsersTab from './AdminUsersTab';
 import AdminRolesTab from './AdminRolesTab';
@@ -23,8 +23,8 @@ export default function AdminPanel({ currentUser, socket, categories, token, onC
       if (isMounted) setLoadingUsers(true);
     }, 0);
 
-    fetch(getApiUrl('/api/users'), {
-      headers: { Authorization: `Bearer ${token}` },
+    apiFetch('/api/users', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then(r => r.json())
       .then(data => {

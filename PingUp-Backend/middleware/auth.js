@@ -111,14 +111,20 @@ const requireRole = (requiredRole) => {
  * Extracts the JWT, validates it, and mounts the payload to req.user.
  */
 const requireAuth = (req, res, next) => {
-  const authHeaderVal = req.headers.authorization;
-  if (!authHeaderVal || !authHeaderVal.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized: No token provided' });
+  let token = null;
+  if (req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+  } else {
+    const authHeaderVal = req.headers.authorization;
+    if (authHeaderVal && authHeaderVal.startsWith('Bearer ')) {
+      token = authHeaderVal.slice('Bearer '.length).trim();
+    }
   }
-  const token = authHeaderVal.slice('Bearer '.length).trim();
+
   if (!token) {
     return res.status(401).json({ error: 'Unauthorized: No token provided' });
   }
+
   const decoded = verifyToken(token);
   if (!decoded) {
     return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' });
@@ -127,8 +133,14 @@ const requireAuth = (req, res, next) => {
   next();
 };
 
+function parseCookie(cookieString, key) {
+  if (!cookieString) return null;
+  const match = cookieString.match(new RegExp('(^|;\\s*)' + key + '=([^;]*)'));
+  return match ? decodeURIComponent(match[2]) : null;
+}
+
 async function socketAuthMiddleware(socket, next) {
-  const token = socket.handshake.auth?.token;
+  const token = socket.handshake.auth?.token || parseCookie(socket.handshake.headers.cookie, 'token');
   if (!token) return next(new Error('AUTH_REQUIRED'));
   const decoded = verifyToken(token);
   if (!decoded) return next(new Error('INVALID_TOKEN'));

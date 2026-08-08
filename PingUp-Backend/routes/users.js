@@ -3,6 +3,34 @@ const router = express.Router();
 const User = require('../models/User');
 const { ROLES, hasPermission } = require('../data/store');
 const { authHeader } = require('../utils/helpers');
+const { requireAuth } = require('../middleware/auth');
+
+// Helper to escape regex special characters
+function escapeRegex(string) {
+    return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+}
+
+router.get('/search', requireAuth, async (req, res) => {
+    try {
+        const q = typeof req.query.q === 'string' ? req.query.q : '';
+        if (!q.trim()) return res.json([]);
+
+        const safeQuery = escapeRegex(q.trim());
+        const matches = await User.find({
+            $or: [
+                { username: { $regex: safeQuery, $options: 'i' } },
+                { displayName: { $regex: safeQuery, $options: 'i' } }
+            ],
+            _id: { $ne: req.user.id },
+            banned: { $ne: true }
+        }).limit(10);
+
+        res.json(matches.map(u => u.toSafeObject()));
+    } catch (err) {
+        console.error('User search error:', err);
+        res.status(500).json({ error: 'Server error during user search.' });
+    }
+});
 
 router.get('/', async (req, res) => {
     const decoded = authHeader(req, res);

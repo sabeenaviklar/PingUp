@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getApiUrl } from '../api';
+import { apiFetch } from '../api';
 import { FiEye, FiEyeOff } from "react-icons/fi";
 
 const MONTHS = [
@@ -10,8 +10,6 @@ const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 const YEARS = Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i);
 
 export default function Register({ onLogin, onSwitch }) {
-  const API_URL = import.meta.env.VITE_API_URL;
-  console.log(API_URL);
   const [form, setForm] = useState({
     email: '',
     displayName: '',
@@ -23,8 +21,8 @@ export default function Register({ onLogin, onSwitch }) {
     emailOptIn: true,
   });
   const [error, setError] = useState('');
-  const [diceMsg, setDiceMsg] = useState('');
   const [loading, setLoading] = useState(false);
+  const [diceMsg, setDiceMsg] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   function handleChange(e) {
@@ -35,6 +33,7 @@ export default function Register({ onLogin, onSwitch }) {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    setDiceMsg('');
     if (!form.username.trim() || !form.password) {
       setError('Username and password are required.');
       return;
@@ -45,7 +44,7 @@ export default function Register({ onLogin, onSwitch }) {
     }
     setLoading(true);
     try {
-      const res = await fetch(getApiUrl('/api/register'), {
+      const res = await apiFetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

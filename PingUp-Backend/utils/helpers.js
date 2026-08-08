@@ -125,16 +125,41 @@ function roomToChannel(r) {
 }
 
 function authHeader(req, res) {
-    const authHeaderVal = req.headers.authorization;
-    if (!authHeaderVal || !authHeaderVal.startsWith('Bearer ')) {
+    let token = null;
+    if (req.cookies && req.cookies.token) {
+        token = req.cookies.token;
+    } else {
+        const authHeaderVal = req.headers.authorization;
+        if (authHeaderVal && authHeaderVal.startsWith('Bearer ')) {
+            token = authHeaderVal.slice('Bearer '.length).trim();
+        }
+    }
+
+    if (!token) {
         res.status(401).json({ error: 'Unauthorized' });
         return null;
     }
-    const token = authHeaderVal.slice('Bearer '.length).trim();
-    if (!token) { res.status(401).json({ error: 'Unauthorized' }); return null; }
     const decoded = verifyToken(token);
-    if (!decoded) { res.status(401).json({ error: 'Invalid token' }); return null; }
+    if (!decoded) {
+        res.status(401).json({ error: 'Invalid token' });
+        return null;
+    }
     return decoded;
+}
+
+/**
+ * Strips the synthetic "cat-" UI prefix from category identifiers
+ * 
+ * Non-obvious decision: Frontend components (like AdminPanel, DMSidebar, CreateChannelForm) emit 
+ * category IDs derived from broadcastStructure (e.g. `cat-engineering`). However, MongoDB Room
+ * models store categories by their literal string name (e.g. `category: "engineering"`).
+ * Stripping this prefix normalizes the target string for DB queries while safely guarding against 
+ * null/undefined/non-string inputs.
+ */
+function sanitizeCategoryId(categoryId) {
+    if (!categoryId || typeof categoryId !== 'string') return '';
+    const trimmed = categoryId.trim();
+    return trimmed.startsWith('cat-') ? trimmed.substring(4).trim() : trimmed;
 }
 
 module.exports = {
@@ -146,5 +171,7 @@ module.exports = {
     getServerSetting,
     broadcastSettings,
     roomToChannel,
-    authHeader
+    authHeader,
+    sanitizeCategoryId,
 };
+

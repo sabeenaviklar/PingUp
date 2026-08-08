@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getApiUrl } from '../api';
+import { apiFetch } from '../api';
 import { FiEye, FiEyeOff } from "react-icons/fi";
 
 export default function Login({ onLogin, onSwitch }) {
@@ -8,13 +8,12 @@ export default function Login({ onLogin, onSwitch }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const API_URL = import.meta.env.VITE_API_URL;
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError(''); setLoading(true);
     try {
-      const res = await fetch(getApiUrl('/api/login'), {
+      const res = await apiFetch('/api/login', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: email.trim(), password }),
       });

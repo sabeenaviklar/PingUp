@@ -10,6 +10,15 @@ const directMessageSchema = new mongoose.Schema({
   senderRole:     { type: String, required: true },
   text:           { type: String, required: true },
   deleted:        { type: Boolean, default: false },
+  reactions: [
+    {
+      emoji: { type: String },
+      users: [{
+        userId: { type: String },
+        username: { type: String }
+      }]
+    }
+  ],
   read:           { type: Boolean, default: false },
   editReactions: [
     {

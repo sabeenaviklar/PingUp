@@ -258,38 +258,41 @@ const [threadReplies, setThreadReplies] = useState([]);
       }
     });
 
-    socket.on('message:reaction:update', ({ messageId, reactions }) => {
-      setMessages(prev =>
-        prev.map(m =>
-          String(m.id) === String(messageId)
-            ? { ...m, reactions }
-            : m
-        )
-      );
-      setThreadReplies(prev =>
-        prev.map(m =>
-          String(m.id) === String(messageId)
-            ? { ...m, reactions }
-            : m
-        )
-      );
+    socket.on('message:reaction:add', ({ messageId, emoji, user }) => {
+      setMessages(prev => prev.map(m => {
+        if (String(m.id) === String(messageId)) {
+          const reactions = m.reactions ? [...m.reactions] : [];
+          const existingIndex = reactions.findIndex(r => r.emoji === emoji);
+          if (existingIndex !== -1) {
+            const existing = { ...reactions[existingIndex] };
+            existing.users = [...existing.users];
+            if (!existing.users.some(u => (u.userId || u) === user.userId)) {
+              existing.users.push(user);
+            }
+            reactions[existingIndex] = existing;
+          } else {
+            reactions.push({ emoji, users: [user] });
+          }
+          return { ...m, reactions };
+        }
+        return m;
+      }));
     });
 
-    socket.on('message:edit:reaction:update', ({ messageId, editReactions }) => {
-      setMessages(prev =>
-        prev.map(m =>
-          String(m.id) === String(messageId)
-            ? { ...m, editReactions }
-            : m
-        )
-      );
-      setThreadReplies(prev =>
-        prev.map(m =>
-          String(m.id) === String(messageId)
-            ? { ...m, editReactions }
-            : m
-        )
-      );
+    socket.on('message:reaction:remove', ({ messageId, emoji, user }) => {
+      setMessages(prev => prev.map(m => {
+        if (String(m.id) === String(messageId)) {
+          if (!m.reactions) return m;
+          const reactions = m.reactions.map(r => {
+            if (r.emoji === emoji) {
+              return { ...r, users: r.users.filter(u => (u.userId || u) !== user.userId) };
+            }
+            return r;
+          }).filter(r => r.users.length > 0);
+          return { ...m, reactions };
+        }
+        return m;
+      }));
     });
 
     socket.on('message:pinned', ({ id, pinnedBy }) => {

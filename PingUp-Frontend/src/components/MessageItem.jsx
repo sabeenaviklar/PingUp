@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import MarkdownMessage from './MarkdownMessage';
-import { formatRelativeTime } from '../utils/formatRelativeTime';
+import EmojiPicker from 'emoji-picker-react';
 
 export default function MessageItem({
   msg,
@@ -20,6 +21,8 @@ export default function MessageItem({
   handleDelete,
   setShowEditHistory
 }) {
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
   return (
     <div
       id={`message-${msg.id}`}
@@ -109,16 +112,21 @@ export default function MessageItem({
         )}
         {msg.reactions?.length > 0 && (
           <div className="msg-reactions">
-            {msg.reactions.map((reaction, idx) => (
-              <button
-                key={idx}
-                className="msg-reaction-chip"
-                onClick={() => handleReaction(msg.id, reaction.emoji)}
-              >
-                <span>{reaction.emoji}</span>
-                <span>{reaction.users.length}</span>
-              </button>
-            ))}
+            {msg.reactions.map((reaction, idx) => {
+              const hasReacted = currentUser && reaction.users.some(u => (u.userId || u) === currentUser.id);
+              const tooltip = reaction.users.map(u => u.username || u.userId || u).join(', ');
+              return (
+                <button
+                  key={idx}
+                  className={`msg-reaction-chip ${hasReacted ? 'msg-reaction-chip-active' : ''}`}
+                  title={tooltip}
+                  onClick={() => handleReaction(msg.id, reaction.emoji)}
+                >
+                  <span>{reaction.emoji}</span>
+                  <span>{reaction.users.length}</span>
+                </button>
+              );
+            })}
           </div>
         )}
         {msg.editReactions?.length > 0 && (
@@ -162,21 +170,27 @@ export default function MessageItem({
             >📌</button>
           )}
 
-          <button
-            className="msg-toolbar-btn"
-            title="React"
-            onClick={() => handleReaction(msg.id, '👍')}
-          >👍</button>
-          <button
-            className="msg-toolbar-btn"
-            title="React"
-            onClick={() => handleReaction(msg.id, '😂')}
-          >😂</button>
-          <button
-            className="msg-toolbar-btn"
-            title="React"
-            onClick={() => handleReaction(msg.id, '🔥')}
-          >🔥</button>
+          <div style={{ position: 'relative' }}>
+            <button
+              className="msg-toolbar-btn"
+              title="Add Reaction"
+              onClick={() => setShowEmojiPicker(prev => !prev)}
+            >
+              😀
+            </button>
+            {showEmojiPicker && (
+              <div style={{ position: 'absolute', bottom: '100%', right: 0, zIndex: 100 }}>
+                <EmojiPicker 
+                  onEmojiClick={(emojiData) => {
+                    handleReaction(msg.id, emojiData.emoji);
+                    setShowEmojiPicker(false);
+                  }}
+                  theme="auto"
+                  previewConfig={{ showPreview: false }}
+                />
+              </div>
+            )}
+          </div>
 
           {msg.editedAt && (
             <button

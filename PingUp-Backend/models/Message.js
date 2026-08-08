@@ -52,7 +52,10 @@ const messageSchema = new mongoose.Schema({
   reactions: [
     {
       emoji: { type: String },
-      users: [{ type: String }]
+      users: [{
+        userId: { type: String },
+        username: { type: String }
+      }]
     }
   ],
   editReactions: [

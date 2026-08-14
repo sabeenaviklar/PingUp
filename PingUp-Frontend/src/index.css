@@ -5324,9 +5324,23 @@ body {
   transition: opacity .15s ease;
 }
 
-.msg-row:hover .msg-toolbar {
+.msg-row:hover .msg-toolbar,
+.msg-row:focus-within .msg-toolbar {
   opacity: 1;
   visibility: visible;
+}
+
+.msg-thread-reply:hover .msg-toolbar,
+.msg-thread-reply:focus-within .msg-toolbar {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Visible focus indicator for keyboard users (WCAG 2.4.7) */
+.msg-row:focus-visible,
+.msg-thread-reply:focus-visible {
+  outline: 2px solid var(--accent, #5865f2);
+  outline-offset: -2px;
 }
 
 .msg-toolbar-btn {

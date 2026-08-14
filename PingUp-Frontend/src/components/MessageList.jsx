@@ -18,11 +18,13 @@ export default function MessageList({
   roomSettings,
 }) {
   const [hoveredMsg, setHoveredMsg] = useState(null);
+  const [focusedMsg, setFocusedMsg] = useState(null);
   const [editingMsgId, setEditingMsgId] = useState(null);
   const [editText, setEditText] = useState('');
   const [showEditHistory, setShowEditHistory] = useState(null);
   const [threadReplyText, setThreadReplyText] = useState('');
   const [hoveredReply, setHoveredReply] = useState(null);
+  const [focusedReply, setFocusedReply] = useState(null);
   const [editingReplyId, setEditingReplyId] = useState(null);
   const [showPinnedSidebar, setShowPinnedSidebar] = useState(false);
   const bottomRef = useRef(null);
@@ -182,6 +184,8 @@ export default function MessageList({
             msg={msg}
             hoveredMsg={hoveredMsg}
             setHoveredMsg={setHoveredMsg}
+            focusedMsg={focusedMsg}
+            setFocusedMsg={setFocusedMsg}
             currentUser={currentUser}
             isMod={isMod}
             editingMsgId={editingMsgId}
@@ -226,6 +230,8 @@ export default function MessageList({
           threadReplies={threadReplies}
           hoveredReply={hoveredReply}
           setHoveredReply={setHoveredReply}
+          focusedReply={focusedReply}
+          setFocusedReply={setFocusedReply}
           editingReplyId={editingReplyId}
           setEditingReplyId={setEditingReplyId}
           currentUser={currentUser}

@@ -6,6 +6,8 @@ export default function MessageThreadPanel({
   threadReplies,
   hoveredReply,
   setHoveredReply,
+  focusedReply,
+  setFocusedReply,
   editingReplyId,
   setEditingReplyId,
   currentUser,
@@ -47,8 +49,16 @@ export default function MessageThreadPanel({
           <div
             key={reply.id}
             className={`msg-thread-reply ${reply.deleted ? 'msg-deleted' : ''}`}
+            tabIndex={reply.deleted ? -1 : 0}
             onMouseEnter={() => setHoveredReply(reply.id)}
             onMouseLeave={() => setHoveredReply(null)}
+            onFocus={() => setFocusedReply(reply.id)}
+            onBlur={(e) => {
+              // Keep the toolbar visible while focus moves between the row and its buttons
+              if (!e.currentTarget.contains(e.relatedTarget)) {
+                setFocusedReply(null);
+              }
+            }}
           >
             <div className="msg-thread-reply-user">
               {reply.username}
@@ -120,12 +130,13 @@ export default function MessageThreadPanel({
               </div>
             )}
 
-            {!reply.deleted && hoveredReply === reply.id && (
+            {!reply.deleted && (hoveredReply === reply.id || focusedReply === reply.id) && (
               <div className="msg-toolbar">
                 {(reply.userId === currentUser?.id || isMod) && editingReplyId !== reply.id && (
                   <button
                     className="msg-toolbar-btn"
                     title="Edit reply"
+                    aria-label="Edit reply"
                     onClick={() => {
                       setEditingReplyId(reply.id);
                       setEditText(reply.text);
@@ -135,7 +146,8 @@ export default function MessageThreadPanel({
                 
                 <button
                   className="msg-toolbar-btn"
-                  title="React"
+                  title="Add 👍 reaction"
+                  aria-label="Add thumbs up reaction"
                   onClick={() => handleReaction(reply.id, '👍')}
                 >👍</button>
 
@@ -143,6 +155,7 @@ export default function MessageThreadPanel({
                   <button
                     className="msg-toolbar-btn msg-toolbar-btn-edit-react"
                     title="React to Edit"
+                    aria-label="React to edit"
                     onClick={() => handleEditReaction(reply.id, '👍')}
                   >✏️👍</button>
                 )}
@@ -151,6 +164,7 @@ export default function MessageThreadPanel({
                   <button
                     className="msg-toolbar-btn msg-toolbar-btn-delete"
                     title="Delete reply"
+                    aria-label="Delete reply"
                     onClick={() => handleDelete(reply.id)}
                   >🗑️</button>
                 )}

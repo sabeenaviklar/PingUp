@@ -202,7 +202,11 @@ export default function MessageInput({
               </span>
             </div>
           )}
-          <button onClick={removeImage} style={{ cursor: 'pointer', background: 'none', border: 'none', fontSize: '16px', color: '#666' }}>✕</button>
+          <button
+            onClick={removeImage}
+            aria-label="Remove attachment"
+            style={{ cursor: 'pointer', background: 'none', border: 'none', fontSize: '16px', color: '#666' }}
+          >✕</button>
         </div>
       )}
       
@@ -253,6 +257,7 @@ export default function MessageInput({
       <button
         className="msg-send-btn"
         disabled={(!text.trim() && !imageFile) || isDisabled || uploading}
+        aria-label="Send Message"
         onClick={handleSend}
       >
         {uploading ? '...' : '➤'}

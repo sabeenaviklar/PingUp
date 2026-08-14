@@ -134,14 +134,32 @@ export default function DMSidebar({
       <nav className="dm-nav">
         <div
           className="dm-nav-item"
+          role="button"
+          tabIndex={0}
           onClick={() => { setShowProfileMenu(false); onShowFriends?.(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setShowProfileMenu(false);
+              onShowFriends?.();
+            }
+          }}
         >
           <span className="dm-nav-icon">👥</span>
           Friends &amp; Online
         </div>
         <div
           className="dm-nav-item"
+          role="button"
+          tabIndex={0}
           onClick={() => { setShowProfileMenu(false); onShowFriends?.(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setShowProfileMenu(false);
+              onShowFriends?.();
+            }
+          }}
         >
           <span className="dm-nav-icon">✉️</span>
           Direct Messages
@@ -223,7 +241,16 @@ export default function DMSidebar({
       <div className="dm-user-bar">
         <div
           className="dm-user-info"
+          role="button"
+          tabIndex={0}
+          aria-expanded={showProfileMenu}
           onClick={() => setShowProfileMenu(v => !v)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setShowProfileMenu(v => !v);
+            }
+          }}
           title="View Profile"
         >
           <div className={`dm-user-avatar avatar-${currentUser.role}`}>
@@ -242,16 +269,22 @@ export default function DMSidebar({
           <button
             className={`dm-action-btn ${muted ? 'active-danger' : ''}`}
             title={muted ? 'Unmute' : 'Mute'}
+            aria-label={muted ? 'Unmute Microphone' : 'Mute Microphone'}
+            aria-pressed={muted}
             onClick={() => setMuted(v => !v)}
           >{muted ? '🔇' : '🎙️'}</button>
           <button
             className={`dm-action-btn ${deafened ? 'active-danger' : ''}`}
             title={deafened ? 'Undeafen' : 'Deafen'}
+            aria-label={deafened ? 'Undeafen' : 'Deafen'}
+            aria-pressed={deafened}
             onClick={() => setDeafened(v => !v)}
           >{deafened ? '🔕' : '🎧'}</button>
           <button
             className="dm-action-btn"
             title="Settings"
+            aria-label="Settings"
+            aria-expanded={showProfileMenu}
             onClick={() => setShowProfileMenu(v => !v)}
           >⚙️</button>
         </div>

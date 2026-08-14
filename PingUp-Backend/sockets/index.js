@@ -1,6 +1,6 @@
 const { socketAuthMiddleware } = require('../middleware/auth');
 const User = require('../models/User');
-const { addOnlineUser, removeOnlineUser } = require('../services/redis');
+const { addOnlineUser, removeOnlineUser, setUserPresence } = require('../services/redis');
 const { setupHandlers } = require('./handlers');
 const { broadcastUserList, broadcastStructure, getServerSetting, safeSocketHandler } = require('../utils/helpers');
 
@@ -21,7 +21,10 @@ function initializeSockets(io) {
             socket.data.user = socket.user;
             
             await addOnlineUser(socket.user.id, socket.id);
-            await User.findByIdAndUpdate(socket.user.id, { online: true, socketId: socket.id });
+            await setUserPresence(socket.user.id, { 
+                status: dbUser.status || 'online', 
+                customStatus: dbUser.customStatus || '' 
+            });
             await broadcastUserList(io);
 
             await broadcastStructure(io);
@@ -35,7 +38,7 @@ function initializeSockets(io) {
                 if (socket.user && socket.user.id) {
                     const socketCount = await removeOnlineUser(socket.user.id, socket.id);
                     if (socketCount === 0) {
-                        await User.findByIdAndUpdate(socket.user.id, { online: false, socketId: null });
+                        // Redis handles hash removal in removeOnlineUser
                     }
                 }
             } catch (cleanupErr) {
@@ -52,7 +55,7 @@ function initializeSockets(io) {
             const socketCount = await removeOnlineUser(socket.user.id, socket.id);
 
             if (socketCount === 0) {
-                await User.findByIdAndUpdate(socket.user.id, { online: false, socketId: null });
+                // Redis presence hash deleted in removeOnlineUser
 
                 if (socket.currentRoom) {
                     io.to(socket.currentRoom).emit('room:notification', {

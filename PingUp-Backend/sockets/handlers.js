@@ -16,6 +16,7 @@ const {
     evictUnauthorizedSockets,
     sanitizeCategoryId,
 } = require('../utils/helpers');
+const { setUserPresence } = require('../services/redis');
 
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -544,6 +545,26 @@ function setupHandlers(io, socket) {
         if (ts) { ts.emit('kicked', { by: `${socket.user.username} (banned)` }); ts.disconnect(true); }
         io.emit('room:notification', { text: `🔨 ${target.username} banned`, type: 'system' });
     }, 'Failed to ban user.'));
+
+    socket.on('user:status:update', safeSocketHandler(socket, 'user:status:update', async ({ status, customStatus }) => {
+        const allowedStatuses = ['online', 'idle', 'dnd', 'invisible'];
+        if (status && !allowedStatuses.includes(status)) return;
+        
+        const updateData = {};
+        if (status) updateData.status = status;
+        if (typeof customStatus === 'string') updateData.customStatus = customStatus.slice(0, 100);
+
+        if (Object.keys(updateData).length > 0) {
+            await User.findByIdAndUpdate(socket.user.id, updateData);
+            
+            const dbUser = await User.findById(socket.user.id);
+            await setUserPresence(socket.user.id, {
+                status: dbUser.status,
+                customStatus: dbUser.customStatus
+            });
+            await broadcastUserList(io);
+        }
+    }, 'Failed to update user status.'));
 
     socket.on('voice:join', safeSocketHandler(socket, 'voice:join', async ({ channelId, channelName }) => {
         const room = await Room.findById(channelId);

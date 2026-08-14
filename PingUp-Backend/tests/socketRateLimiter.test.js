@@ -7,7 +7,6 @@ const {
     checkSocketRateLimit,
 } = require('../utils/socketRateLimiter');
 
-
 test('Socket Rate Limiting', async (t) => {
 
     // TEST 1
@@ -120,7 +119,7 @@ test('Socket Rate Limiting', async (t) => {
                 'message:send should be rate limited'
             );
 
-            // But dm:send has its own bucket
+            // dm:send has its own bucket
             const dmAllowed = await checkSocketRateLimit(
                 userId,
                 'dm:send'
@@ -172,6 +171,54 @@ test('Socket Rate Limiting', async (t) => {
             const stopAllowed = await checkSocketRateLimit(
                 userId,
                 'dm:typing:stop'
+            );
+
+            assert.equal(
+                stopAllowed,
+                true,
+                'typing:stop should have an independent rate-limit bucket'
+            );
+        }
+    );
+
+
+    // TEST 5 - ROOM TYPING
+    await t.test(
+        'room typing events are rate limited independently',
+        async () => {
+
+            const userId = `room-typing-user-${Date.now()}`;
+
+            // First 20 typing:start requests should be allowed
+            for (let i = 0; i < 20; i++) {
+                const allowed = await checkSocketRateLimit(
+                    userId,
+                    'typing:start'
+                );
+
+                assert.equal(
+                    allowed,
+                    true,
+                    `Typing request ${i + 1} should be allowed`
+                );
+            }
+
+            // 21st should be blocked
+            const blocked = await checkSocketRateLimit(
+                userId,
+                'typing:start'
+            );
+
+            assert.equal(
+                blocked,
+                false,
+                '21st typing:start request should be rate limited'
+            );
+
+            // typing:stop has its own independent bucket
+            const stopAllowed = await checkSocketRateLimit(
+                userId,
+                'typing:stop'
             );
 
             assert.equal(

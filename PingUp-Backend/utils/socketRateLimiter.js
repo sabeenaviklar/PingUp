@@ -11,14 +11,26 @@ const limiters = {
         duration: 1,
     }),
 
-    'dm:typing:start': new RateLimiterMemory({
-    points: 30,
-    duration: 1,
-   }),
+    // Room typing events
+    'typing:start': new RateLimiterMemory({
+        points: 20,
+        duration: 1,
+    }),
 
-   'dm:typing:stop': new RateLimiterMemory({
-    points: 30,
-    duration: 1, 
+    'typing:stop': new RateLimiterMemory({
+        points: 20,
+        duration: 1,
+    }),
+
+    // DM typing events
+    'dm:typing:start': new RateLimiterMemory({
+        points: 30,
+        duration: 1,
+    }),
+
+    'dm:typing:stop': new RateLimiterMemory({
+        points: 30,
+        duration: 1,
     }),
 
     'message:reaction': new RateLimiterMemory({

@@ -1580,13 +1580,31 @@ replyCount: 0, imageUrl: imageUrl || null,
 });
 
 // ─── Connect & Start ──────────────────────────────────────────────
-mongoose.connect(process.env.MONGO_URI)
-    .then(async () => {
-        console.log('✅ MongoDB connected');
-        await redisReady;
-        await seedRooms();
-        server.listen(process.env.PORT || 3001, () =>
-            console.log(`🚀 Server on http://localhost:${process.env.PORT || 3001}`)
+
+async function startServer() {
+    await mongoose.connect(process.env.MONGO_URI);
+
+    console.log('✅ MongoDB connected');
+
+    await redisReady;
+    await seedRooms();
+
+    server.listen(process.env.PORT || 3001, () => {
+        console.log(
+            `🚀 Server on http://localhost:${process.env.PORT || 3001}`
         );
-    })
-    .catch(err => { console.error('MongoDB error:', err); process.exit(1); });
+    });
+}
+
+if (require.main === module) {
+    startServer().catch(err => {
+        console.error('MongoDB error:', err);
+        process.exit(1);
+    });
+}
+
+module.exports = {
+    app,
+    server,
+    io,
+};

@@ -156,16 +156,37 @@ function setupHandlers(io, socket) {
         }
     }, 'Message failed to send.'));
 
-    socket.on('typing:start', ({ roomName, channelId }) => {
+    // socket.on('typing:start', ({ roomName, channelId }) => {
+    //     socket.to(channelId || roomName).emit('typing:update', {
+    //         username: socket.user.username, typing: true,
+    //     });
+    // });
+
+    socket.on(
+    'typing:start',
+    safeSocketHandler(socket, 'typing:start', async ({ roomName, channelId }) => {
         socket.to(channelId || roomName).emit('typing:update', {
-            username: socket.user.username, typing: true,
+            username: socket.user.username,
+            typing: true,
         });
-    });
-    socket.on('typing:stop', ({ roomName, channelId }) => {
+    })
+);
+    // socket.on('typing:stop', ({ roomName, channelId }) => {
+    //     socket.to(channelId || roomName).emit('typing:update', {
+    //         username: socket.user.username, typing: false,
+    //     });
+    // });
+
+    socket.on(
+    'typing:stop',
+    safeSocketHandler(socket, 'typing:stop', async ({ roomName, channelId }) => {
         socket.to(channelId || roomName).emit('typing:update', {
-            username: socket.user.username, typing: false,
+            username: socket.user.username,
+            typing: false,
         });
-    });
+    })
+);
+
 
     socket.on('channel:create', safeSocketHandler(socket, 'channel:create', async ({ categoryId, name, description, emoji }) => {
         const allowUserChannelCreation = await getServerSetting('allowUserChannelCreation', false);
@@ -665,16 +686,38 @@ function setupHandlers(io, socket) {
         }
     }));
 
-    socket.on('dm:typing:start', ({ toUserId }) => {
-        const convId = [socket.user.id, toUserId].sort().join('_');
-        socket.to(`dm:${convId}`).emit('dm:typing', { username: socket.user.username, typing: true });
-    });
-    socket.on('dm:typing:stop', ({ toUserId }) => {
-        const convId = [socket.user.id, toUserId].sort().join('_');
-        socket.to(`dm:${convId}`).emit('dm:typing', { username: socket.user.username, typing: false });
-    });
-}
+socket.on(
+    'dm:typing:start',
+    safeSocketHandler(
+        socket,
+        'dm:typing:start',
+        async ({ toUserId }) => {
+            const convId = [socket.user.id, toUserId].sort().join('_');
 
+            socket.to(`dm:${convId}`).emit('dm:typing', {
+                username: socket.user.username,
+                typing: true,
+            });
+        }
+    )
+);
+
+socket.on(
+    'dm:typing:stop',
+    safeSocketHandler(
+        socket,
+        'dm:typing:stop',
+        async ({ toUserId }) => {
+            const convId = [socket.user.id, toUserId].sort().join('_');
+
+            socket.to(`dm:${convId}`).emit('dm:typing', {
+                username: socket.user.username,
+                typing: false,
+            });
+        }
+    )
+);
+}
 module.exports = {
     setupHandlers
 };

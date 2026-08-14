@@ -4,14 +4,33 @@ const Room = require('../models/Room');
 const ServerSettings = require('../models/ServerSettings');
 const { verifyToken } = require('../middleware/auth');
 const { getOnlineUserIds } = require('../services/redis');
+const { checkSocketRateLimit } = require('./socketRateLimiter');
 
 function rollRole() {
     return Math.random() < 0.30 ? ROLES.MODERATOR : ROLES.MEMBER;
 }
 
+
 function safeSocketHandler(socket, eventName, handler, clientMessage = 'Something went wrong.') {
     return async (...args) => {
         try {
+            const userId = socket.user?.id;
+
+            if (!userId) {
+                socket.emit('error:general', 'Authentication required.');
+                return;
+            }
+
+            const allowed = await checkSocketRateLimit(userId,eventName);
+
+            if (!allowed) {
+                socket.emit('error:rate_limit', {
+                    event: eventName,
+                    message: 'Too many requests. Please slow down.',
+                });
+                return;
+            }
+
             await handler(...args);
         } catch (err) {
             console.error(`[socket:${eventName}]`, err);

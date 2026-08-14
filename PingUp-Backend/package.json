@@ -19,6 +19,7 @@
         "jsonwebtoken": "^9.0.2",
         "mongoose": "^8.0.3",
         "multer": "^2.1.1",
+        "rate-limiter-flexible": "^11.2.0",
         "redis": "^5.12.1",
         "socket.io": "^4.7.2",
         "uuid": "^14.0.0"

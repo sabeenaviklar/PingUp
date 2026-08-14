@@ -94,14 +94,16 @@ function setupHandlers(io, socket) {
                 editReactions: m.editReactions || [],
                 parentMessageId: m.parentMessageId,
                 replyCount: m.replyCount || 0,
+                imageUrl: m.imageUrl || null,
+                audioUrl: m.audioUrl || null,
             })),
             roomSettings: roomToChannel(room),
         });
     }, 'Failed to join channel.'));
 
-    socket.on('message:send', safeSocketHandler(socket, 'message:send', async ({ roomName, channelId, text, parentMessageId, imageUrl }) => {
+    socket.on('message:send', safeSocketHandler(socket, 'message:send', async ({ roomName, channelId, text, parentMessageId, imageUrl, audioUrl }) => {
         const trimmed = text?.trim();
-        if (!trimmed && !imageUrl) return;
+        if (!trimmed && !imageUrl && !audioUrl) return;
 
         if (trimmed && trimmed.length > MAX_MESSAGE_LENGTH) {
             return socket.emit('error:general', `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters.`);
@@ -140,6 +142,7 @@ function setupHandlers(io, socket) {
             text: trimmed,
             parentMessageId: parentMessageId || null, 
             imageUrl: imageUrl || null,
+            audioUrl: audioUrl || null,
         });
 
         const payload = {
@@ -147,6 +150,8 @@ function setupHandlers(io, socket) {
             username: socket.user.username, role: freshUser.role,
             text: trimmed, timestamp: new Date(), deleted: false, pinned: false,
             parentMessageId: parentMessageId || null,
+            imageUrl: imageUrl || null,
+            audioUrl: audioUrl || null,
             replyCount: 0,
         };
 
@@ -592,8 +597,9 @@ function setupHandlers(io, socket) {
         if (socket.currentDM === convId) socket.currentDM = null;
     });
 
-    socket.on('dm:send', safeSocketHandler(socket, 'dm:send', async ({ toUserId, text, clientId }, callback) => {
+    socket.on('dm:send', safeSocketHandler(socket, 'dm:send', async ({ toUserId, text, imageUrl, audioUrl, clientId }, callback) => {
         try {
+            if ((!text || !text.trim()) && !imageUrl && !audioUrl) return;
             if (text && text.trim().length > MAX_MESSAGE_LENGTH) {
                 if (typeof callback === 'function') {
                     return callback({ error: `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters.`, status: 'failed' });
@@ -614,7 +620,7 @@ function setupHandlers(io, socket) {
                 msg = await DirectMessage.create({
                     conversationId: convId, participants: [socket.user.id, toUserId],
                     senderId: socket.user.id, senderUsername: socket.user.username,
-                    senderRole: socket.user.role, text, clientId
+                    senderRole: socket.user.role, text: text || '', imageUrl: imageUrl || null, audioUrl: audioUrl || null, clientId
                 });
             } catch (createErr) {
                 if (createErr.code === 11000 || createErr.name === 'MongoError' || createErr.name === 'MongoServerError') {
@@ -628,7 +634,7 @@ function setupHandlers(io, socket) {
             const payload = {
                 id: msg._id.toString(), conversationId: convId, senderId: socket.user.id,
                 senderUsername: socket.user.username, senderRole: socket.user.role,
-                text, timestamp: msg.createdAt, read: msg.read || false, clientId
+                text: msg.text, imageUrl: msg.imageUrl, audioUrl: msg.audioUrl, timestamp: msg.createdAt, read: msg.read || false, clientId
             }
 
             const receiverViewingChat = [...io.sockets.sockets.values()].some(

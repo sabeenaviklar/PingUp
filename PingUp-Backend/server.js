@@ -24,7 +24,6 @@ const dmRoutes = require('./routes/dm');
 const messagesRoutes = require('./routes/messages');
 const searchRoutes = require('./routes/search');
 const { initializeSockets } = require('./sockets/index');
-const { socketAuthMiddleware } = require('./middleware/auth');
 
 const app = express();
 app.set('trust proxy', 1);

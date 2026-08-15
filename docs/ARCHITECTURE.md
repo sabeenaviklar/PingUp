@@ -8,7 +8,7 @@
 
 ```mermaid
 flowchart TD
-    subgraph Client ["🖥️ PingUp-Frontend (React 18 + Vite)"]
+    subgraph Client ["🖥️ PingUp-Frontend (React 19 + Vite)"]
         A[main.jsx\nEntry point] --> B[App.jsx\nRoot — socket wiring + routing]
         B --> C[socket.js\nSocket.IO client singleton]
         B --> D[Components]
@@ -21,13 +21,13 @@ flowchart TD
     end
 
     subgraph Transport ["🔌 Transport Layer"]
-        E[REST — HTTP/JSON\n/api/*]
+        E[REST — HTTP/JSON via apiFetch\n/api/* · HttpOnly cookie auth]
         F[WebSockets\nSocket.IO 4.x]
     end
 
     subgraph Server ["⚙️ PingUp-Backend (Node.js + Express)"]
         G[server.js\nExpress routes + Socket.IO handlers]
-        H[middleware/auth.js\nJWT verify]
+        H[middleware/auth.js\nJWT cookie verify]
         G --> H
     end
 
@@ -39,7 +39,7 @@ flowchart TD
     end
 
     C -- "Socket events" --> F
-    B -- "fetch() calls" --> E
+    B -- "apiFetch() calls" --> E
     E --> G
     F --> G
     G --> DB
@@ -50,7 +50,9 @@ flowchart TD
 ## Layer by Layer
 
 ### Frontend — `PingUp-Frontend/`
-React 18 + Vite single-page app. All real-time state lives in `App.jsx`, which holds the socket connection and passes data down as props. `socket.js` exports a singleton Socket.IO client so every component shares one persistent connection. Styling is handled entirely by `index.css` — no utility-class framework.
+React 19 + Vite single-page app. All real-time state lives in `App.jsx`, which holds the socket connection and passes data down as props. `socket.js` exports a singleton Socket.IO client so every component shares one persistent connection. Styling is handled entirely by `index.css` — no utility-class framework.
+
+All REST calls go through the `apiFetch()` wrapper in `src/api.js`, which resolves the backend base URL and sends every request with `credentials: 'include'` so the session cookie is attached automatically.
 
 ### Transport
 Two channels to the backend:
@@ -60,10 +62,10 @@ Two channels to the backend:
 | REST (`/api/*`) | Auth, loading initial data on app start |
 | Socket.IO | Everything real-time — messages, typing, presence, DMs, voice |
 
-JWT tokens are attached to both — as a `Bearer` header for REST and as a handshake auth parameter for the socket.
+**Session auth — HttpOnly cookies.** On login/register the backend sets a `token` cookie (`httpOnly: true`, `secure` in production, `sameSite: none/lax`). The cookie is attached automatically by `apiFetch()` (`credentials: 'include'`) on REST calls and by the Socket.IO client (`withCredentials: true`); the socket also passes the in-memory token as a handshake `auth` parameter for the server's `socketAuthMiddleware`. No token is persisted in client-side storage (localStorage/sessionStorage) — tokens are held in memory only — which mitigates XSS-based session hijacking. On startup the app verifies the cookie by calling `GET /api/auth/me` (a `401` triggers logout).
 
 ### Backend — `PingUp-Backend/`
-All server logic lives in `server.js`: Express routes and Socket.IO event handlers. `middleware/auth.js` handles JWT signing, verification, and socket-level auth. Permission checks (kick, ban, promote) are enforced here — never on the client.
+All server logic lives in `server.js`: Express routes and Socket.IO event handlers. `middleware/auth.js` handles JWT signing and verification: the REST `requireAuth` middleware reads the HttpOnly `token` cookie first (the `Bearer` header remains only as a fallback), and `socketAuthMiddleware` accepts the token from the handshake `auth` object or the cookie. Permission checks (kick, ban, promote) are enforced here — never on the client.
 
 ### Database — MongoDB Atlas
 | Model | Key fields |
@@ -83,7 +85,8 @@ All server logic lives in `server.js`: Express routes and Socket.IO event handle
 | `src/socket.js` | Shared Socket.IO client — import this to emit or listen anywhere |
 | `src/index.css` | Entire design system — CSS variables, layout, component styles |
 | `server.js` | All REST routes and Socket.IO handlers |
-| `middleware/auth.js` | JWT logic — touch this for anything auth-related |
+| `src/api.js` | `apiFetch()` wrapper — adds `credentials: 'include'` and the backend base URL to every REST call |
+| `middleware/auth.js` | JWT + HttpOnly-cookie auth — touch this for anything auth-related |
 | `models/` | Data shapes — check before writing any DB query |
 
 ---
@@ -92,6 +95,6 @@ All server logic lives in `server.js`: Express routes and Socket.IO event handle
 
 1. User types in `MessageInput.jsx` and hits enter
 2. `App.jsx` emits `message:send` via `socket.js`
-3. `server.js` verifies JWT, saves to MongoDB
+3. `server.js` verifies the JWT from the session cookie, saves to MongoDB
 4. Server broadcasts `message:new` to the channel
 5. `MessageList.jsx` appends it to state — no page refresh

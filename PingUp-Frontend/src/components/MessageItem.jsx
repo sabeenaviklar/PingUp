@@ -1,10 +1,13 @@
 import MarkdownMessage from './MarkdownMessage';
+import AudioPlayer from './AudioPlayer';
 import { formatRelativeTime } from '../utils/formatRelativeTime';
 
 export default function MessageItem({
   msg,
   hoveredMsg,
   setHoveredMsg,
+  focusedMsg,
+  setFocusedMsg,
   currentUser,
   isMod,
   editingMsgId,
@@ -24,8 +27,16 @@ export default function MessageItem({
     <div
       id={`message-${msg.id}`}
       className={`msg-row ${msg.deleted ? 'msg-deleted' : ''} ${msg.pinned && !msg.deleted ? 'msg-is-pinned' : ''}`}
+      tabIndex={msg.deleted ? -1 : 0}
       onMouseEnter={() => setHoveredMsg(msg.id)}
       onMouseLeave={() => setHoveredMsg(null)}
+      onFocus={() => setFocusedMsg(msg.id)}
+      onBlur={(e) => {
+        // Keep the toolbar visible while focus moves between the row and its buttons
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+          setFocusedMsg(null);
+        }
+      }}
     >
       <div className={`msg-avatar msg-avatar-role-${msg.role}`}>
         {msg.username?.[0]?.toUpperCase()}
@@ -92,7 +103,10 @@ export default function MessageItem({
           </div>
         ) : (
           <div className="msg-text">
-            <MarkdownMessage content={msg.text} />
+            {msg.text && <MarkdownMessage content={msg.text} />}
+            {msg.audioUrl && (
+              <AudioPlayer src={msg.audioUrl} title={`Voice note from ${msg.username}`} />
+            )}
             {msg.imageUrl && (
               <img
                 src={msg.imageUrl}
@@ -138,18 +152,20 @@ export default function MessageItem({
         )}
       </div>
 
-      {!msg.deleted && hoveredMsg === msg.id && (
+      {!msg.deleted && (hoveredMsg === msg.id || focusedMsg === msg.id) && (
         <div className="msg-toolbar">
           {(msg.userId === currentUser?.id || isMod) && editingMsgId !== msg.id && (
             <button
               className="msg-toolbar-btn"
               title="Edit message"
+              aria-label="Edit message"
               onClick={() => handleEditStart(msg)}
             >✏️</button>
           )}
           <button
             className="msg-toolbar-btn"
             title="Reply to message"
+            aria-label="Reply to message"
             onClick={() => onOpenThread(msg)}
           >
             ↩️
@@ -158,23 +174,27 @@ export default function MessageItem({
             <button
               className="msg-toolbar-btn"
               title={msg.pinned ? 'Unpin' : 'Pin message'}
+              aria-label={msg.pinned ? 'Unpin message' : 'Pin message'}
               onClick={() => handlePin(msg.id)}
             >📌</button>
           )}
 
           <button
             className="msg-toolbar-btn"
-            title="React"
+            title="Add 👍 reaction"
+            aria-label="Add thumbs up reaction"
             onClick={() => handleReaction(msg.id, '👍')}
           >👍</button>
           <button
             className="msg-toolbar-btn"
-            title="React"
+            title="Add 😂 reaction"
+            aria-label="Add laughing reaction"
             onClick={() => handleReaction(msg.id, '😂')}
           >😂</button>
           <button
             className="msg-toolbar-btn"
-            title="React"
+            title="Add 🔥 reaction"
+            aria-label="Add fire reaction"
             onClick={() => handleReaction(msg.id, '🔥')}
           >🔥</button>
 
@@ -182,6 +202,7 @@ export default function MessageItem({
             <button
               className="msg-toolbar-btn msg-toolbar-btn-edit-react"
               title="React to Edit"
+              aria-label="React to edit"
               onClick={() => handleEditReaction(msg.id, '👍')}
             >✏️👍</button>
           )}
@@ -190,6 +211,7 @@ export default function MessageItem({
             <button
               className="msg-toolbar-btn msg-toolbar-btn-delete"
               title="Delete message"
+              aria-label="Delete message"
               onClick={() => handleDelete(msg.id)}
             >🗑️</button>
           )}

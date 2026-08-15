@@ -24,6 +24,7 @@ const dmRoutes = require('./routes/dm');
 const messagesRoutes = require('./routes/messages');
 const searchRoutes = require('./routes/search');
 const { initializeSockets } = require('./sockets/index');
+const { socketAuthMiddleware } = require('./middleware/auth');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -1578,7 +1579,6 @@ replyCount: 0, imageUrl: imageUrl || null,
         console.log(`[-] ${socket.user.username} (${socketCount} session(s) remaining)`);
     }, 'Failed to clean up disconnected user.'));
 });
-
 // ─── Connect & Start ──────────────────────────────────────────────
 
 async function startServer() {
@@ -1608,3 +1608,4 @@ module.exports = {
     server,
     io,
 };
+

@@ -33,7 +33,18 @@ export default function ChannelCategory({
     <div className="dm-category-group">
       <div
         className="dm-category-header"
+        role="button"
+        tabIndex={0}
+        aria-expanded={collapsed[cat.id] ? 'false' : 'true'}
         onClick={() => toggleCollapse(cat.id)}
+        onKeyDown={(e) => {
+          // Ignore key events that originate from nested interactive elements
+          if (e.target !== e.currentTarget) return;
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleCollapse(cat.id);
+          }
+        }}
       >
         <span className="dm-cat-arrow">{collapsed[cat.id] ? '▶' : '▼'}</span>
         <span className="dm-cat-label">{cat.name}</span>
@@ -43,6 +54,7 @@ export default function ChannelCategory({
             <button
               className="dm-cat-icon-btn"
               title="Add channel"
+              aria-label="Add channel"
               onClick={e => {
                 e.stopPropagation();
                 setShowNewChannel(showNewChannel === cat.id ? null : cat.id);
@@ -51,6 +63,7 @@ export default function ChannelCategory({
             <button
               className="dm-cat-icon-btn dm-cat-icon-btn-danger"
               title="Delete category"
+              aria-label="Delete category"
               onClick={e => handleDeleteCategory(e, cat.id)}
             >✕</button>
           </div>
@@ -67,6 +80,8 @@ export default function ChannelCategory({
               <button
                 key={em} type="button"
                 className={`dm-emoji-opt ${chForm.emoji === em ? 'selected' : ''}`}
+                aria-label={`Use channel emoji ${em}`}
+                aria-pressed={chForm.emoji === em}
                 onClick={() => setChForm(f => ({ ...f, emoji: em }))}
               >{em}</button>
             ))}
@@ -112,6 +127,7 @@ export default function ChannelCategory({
               <button
                 className={`dm-ch-quick-btn ${ch.isReadOnly ? 'active' : ''}`}
                 title="Toggle read-only"
+                aria-label="Toggle read-only"
                 onClick={e => {
                   e.stopPropagation();
                   socket?.emit('channel:toggleReadOnly', { channelId: ch.id });
@@ -120,6 +136,7 @@ export default function ChannelCategory({
               <button
                 className={`dm-ch-quick-btn ${ch.isLocked ? 'active' : ''}`}
                 title="Toggle lock"
+                aria-label="Toggle lock"
                 onClick={e => {
                   e.stopPropagation();
                   socket?.emit('channel:toggleLock', { channelId: ch.id });
@@ -128,6 +145,7 @@ export default function ChannelCategory({
               <button
                 className={`dm-ch-quick-btn ${ch.isPrivate ? 'active' : ''}`}
                 title="Toggle private"
+                aria-label="Toggle private"
                 onClick={e => {
                   e.stopPropagation();
                   socket?.emit('channel:togglePrivate', { channelId: ch.id });
@@ -154,6 +172,7 @@ export default function ChannelCategory({
               <button
                 className="dm-ch-del-btn"
                 title="Delete channel"
+                aria-label="Delete channel"
                 onClick={e => handleDeleteChannel(e, ch.id)}
               >🗑️</button>
             </div>

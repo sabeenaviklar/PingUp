@@ -162,6 +162,37 @@ function setupHandlers(io, socket) {
         }
     }, 'Message failed to send.'));
 
+    // socket.on('typing:start', ({ roomName, channelId }) => {
+    //     socket.to(channelId || roomName).emit('typing:update', {
+    //         username: socket.user.username, typing: true,
+    //     });
+    // });
+
+    socket.on(
+    'typing:start',
+    safeSocketHandler(socket, 'typing:start', async ({ roomName, channelId }) => {
+        socket.to(channelId || roomName).emit('typing:update', {
+            username: socket.user.username,
+            typing: true,
+        });
+    })
+);
+    // socket.on('typing:stop', ({ roomName, channelId }) => {
+    //     socket.to(channelId || roomName).emit('typing:update', {
+    //         username: socket.user.username, typing: false,
+    //     });
+    // });
+
+    socket.on(
+    'typing:stop',
+    safeSocketHandler(socket, 'typing:stop', async ({ roomName, channelId }) => {
+        socket.to(channelId || roomName).emit('typing:update', {
+            username: socket.user.username,
+            typing: false,
+        });
+    })
+);
+
     socket.on('typing:start', ({ roomName, channelId }) => {
         const target = channelId || roomName;
         if (!target) return;
@@ -689,6 +720,37 @@ function setupHandlers(io, socket) {
         }
     }));
 
+socket.on(
+    'dm:typing:start',
+    safeSocketHandler(
+        socket,
+        'dm:typing:start',
+        async ({ toUserId }) => {
+            const convId = [socket.user.id, toUserId].sort().join('_');
+
+            socket.to(`dm:${convId}`).emit('dm:typing', {
+                username: socket.user.username,
+                typing: true,
+            });
+        }
+    )
+);
+
+socket.on(
+    'dm:typing:stop',
+    safeSocketHandler(
+        socket,
+        'dm:typing:stop',
+        async ({ toUserId }) => {
+            const convId = [socket.user.id, toUserId].sort().join('_');
+
+            socket.to(`dm:${convId}`).emit('dm:typing', {
+                username: socket.user.username,
+                typing: false,
+            });
+        }
+    )
+);
     socket.on('dm:typing:start', ({ toUserId }) => {
         if (!toUserId) return;
         const target = `dm:${[socket.user.id, toUserId].sort().join('_')}`;
@@ -709,7 +771,6 @@ function setupHandlers(io, socket) {
         if (socket.user?.id) clearUserTyping(socket.user.id);
     });
 }
-
 module.exports = {
     setupHandlers
 };

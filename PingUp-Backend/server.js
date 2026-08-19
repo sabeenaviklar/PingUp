@@ -24,6 +24,7 @@ const dmRoutes = require('./routes/dm');
 const messagesRoutes = require('./routes/messages');
 const searchRoutes = require('./routes/search');
 const { initializeSockets } = require('./sockets/index');
+const { socketAuthMiddleware } = require('./middleware/auth');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -1579,14 +1580,17 @@ replyCount: 0, imageUrl: imageUrl || null,
     }, 'Failed to clean up disconnected user.'));
 });
 
-// ─── Connect & Start ──────────────────────────────────────────────
-mongoose.connect(process.env.MONGO_URI)
-    .then(async () => {
-        console.log('✅ MongoDB connected');
-        await redisReady;
-        await seedRooms();
-        server.listen(process.env.PORT || 3001, () =>
-            console.log(`🚀 Server on http://localhost:${process.env.PORT || 3001}`)
-        );
-    })
-    .catch(err => { console.error('MongoDB error:', err); process.exit(1); });
+if (process.env.NODE_ENV !== 'test') {
+    mongoose.connect(process.env.MONGO_URI)
+        .then(async () => {
+            console.log('✅ MongoDB connected');
+            await redisReady;
+            await seedRooms();
+            server.listen(process.env.PORT || 3001, () =>
+                console.log(`🚀 Server on http://localhost:${process.env.PORT || 3001}`)
+            );
+        })
+        .catch(err => { console.error('MongoDB error:', err); process.exit(1); });
+}
+
+module.exports = { app, server };

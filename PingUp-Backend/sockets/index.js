@@ -19,7 +19,12 @@ function initializeSockets(io) {
 
             socket.user.role = dbUser.role;
             socket.data.user = socket.user;
-            
+
+            // Join a per-user room so cross-instance targeting (kick/ban/promote/DM
+            // notifications) works through the Redis adapter instead of the
+            // process-local io.sockets.sockets map.
+            socket.join(`user:${socket.user.id}`);
+
             await addOnlineUser(socket.user.id, socket.id);
             await User.findByIdAndUpdate(socket.user.id, { online: true, socketId: socket.id });
             await broadcastUserList(io);

@@ -121,8 +121,9 @@ async function processCommand(io, socket, roomName, text) {
             if (target.role === ROLES.ADMIN) return err('Cannot kick the admin.');
             if (socket.user.role === ROLES.MODERATOR && target.role !== ROLES.MEMBER)
                 return err('Moderators can only kick members.');
-            const ts = [...io.sockets.sockets.values()].find(s => s.user?.id === target._id.toString());
-            if (ts) { ts.emit('kicked', { by: socket.user.username }); ts.disconnect(true); }
+            const ts = io.to(`user:${target._id.toString()}`);
+            ts.emit('kicked', { by: socket.user.username });
+            await io.in(`user:${target._id.toString()}`).disconnectSockets(true);
             ok(`${args[0]} kicked.`);
             io.emit('room:notification', { text: `👢 ${args[0]} was kicked`, type: 'system' });
             break;
@@ -268,8 +269,14 @@ async function processCommand(io, socket, roomName, text) {
             if (targetUser.role === ROLES.ADMIN)
                 return err('Cannot change the admin role.');
             await User.updateOne({ _id: targetUser._id }, { role: newRole });
-            const ls = [...io.sockets.sockets.values()].find(s => s.user?.id === targetUser._id.toString());
-            if (ls) { ls.user.role = newRole; ls.emit('role:updated', { role: newRole }); }
+            // Notify all sockets of the target across every instance via the per-user room.
+            io.to(`user:${targetUser._id.toString()}`).emit('role:updated', { role: newRole });
+            // Refresh in-memory role on LOCAL sockets (see comment in sockets/handlers.js
+            // user:setrole — relies on socket.data.user === socket.user reference).
+            const promotedSockets = await io.in(`user:${targetUser._id.toString()}`).fetchSockets();
+            for (const s of promotedSockets) {
+                if (s.data?.user) s.data.user.role = newRole;
+            }
             await broadcastUserList(io);
             ok(`${targetName} is now ${newRole}.`);
             io.emit('room:notification', { text: `🔰 ${targetName} → ${newRole}`, type: 'system' });
@@ -283,8 +290,8 @@ async function processCommand(io, socket, roomName, text) {
             if (target.role === ROLES.ADMIN) return err('Cannot ban the admin.');
             target.banned = true;
             await target.save();
-            const ts = [...io.sockets.sockets.values()].find(s => s.user?.id === target._id.toString());
-            if (ts) { ts.emit('kicked', { by: `${socket.user.username} (banned)` }); ts.disconnect(true); }
+            io.to(`user:${target._id.toString()}`).emit('kicked', { by: `${socket.user.username} (banned)` });
+            await io.in(`user:${target._id.toString()}`).disconnectSockets(true);
             ok(`${args[0]} banned.`);
             io.emit('room:notification', { text: `🔨 ${args[0]} was banned`, type: 'system' });
             break;
@@ -298,8 +305,13 @@ async function processCommand(io, socket, roomName, text) {
             const newRole = rollRole();
             target.role = newRole;
             await target.save();
-            const ls = [...io.sockets.sockets.values()].find(s => s.user?.id === target._id.toString());
-            if (ls) { ls.user.role = newRole; ls.emit('role:updated', { role: newRole }); }
+            io.to(`user:${target._id.toString()}`).emit('role:updated', { role: newRole });
+            // Refresh in-memory role on LOCAL sockets (see comment in sockets/handlers.js
+            // user:setrole — relies on socket.data.user === socket.user reference).
+            const rerolledSockets = await io.in(`user:${target._id.toString()}`).fetchSockets();
+            for (const s of rerolledSockets) {
+                if (s.data?.user) s.data.user.role = newRole;
+            }
             await broadcastUserList(io);
             ok(`🎲 ${args[0]} rerolled → ${newRole.toUpperCase()}`);
             io.emit('room:notification', { text: `🎲 ${args[0]}'s role rerolled to ${newRole}`, type: 'system' });
